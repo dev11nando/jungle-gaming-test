@@ -74,10 +74,6 @@ export class WageringController {
     @Inject(ProviderIdentityPort) private readonly identity: ProviderIdentityPort,
   ) {}
 
-  /**
-   * 200 PROCESSED (inclusive replay) · 202 PENDING/PENDING_REFERENCE · 422 REJECTED/FAILED.
-   * Replay repete o status HTTP original com `idempotentReplay: true`.
-   */
   @Post('wagering/transactions')
   async create(
     @Body() body: unknown,
@@ -97,7 +93,6 @@ export class WageringController {
   async getById(@Param('transactionId') transactionId: string) {
     const identity = requireIdentity(this.identity);
     const tx = await this.queries.getTransaction(requireUuid(transactionId, 'transactionId'));
-    // Um provedor não enxerga transações de outro: responde como inexistente.
     if (tx.providerId !== identity.providerId) throw new NotFoundError('TRANSACTION_NOT_FOUND', 'transaction not found');
     return presentTransaction(tx);
   }

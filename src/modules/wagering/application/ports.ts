@@ -8,9 +8,7 @@ import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry';
 export interface WalletRepository {
   insert(wallet: Wallet): Promise<void>;
   findById(id: string): Promise<Wallet | undefined>;
-  /** SELECT ... FOR UPDATE. Só dentro de transação. */
   lockById(id: string): Promise<Wallet | undefined>;
-  /** UPDATE condicionado à versão lida; falha se não afetar exatamente uma linha. */
   updateBalance(wallet: Wallet, expectedVersion: number): Promise<void>;
 }
 
@@ -22,9 +20,7 @@ export interface WagerTransactionRepository {
   findByIdempotencyKey(key: string): Promise<WagerTransaction | undefined>;
   findByProviderExternalId(providerId: string, externalTransactionId: string): Promise<WagerTransaction | undefined>;
   hasProcessedReversal(referenceTransactionId: string): Promise<boolean>;
-  /** Ids de PENDING_REFERENCE vencidas, pulando linhas travadas por outro worker. */
   claimDuePendingReferences(now: Date, limit: number): Promise<string[]>;
-  /** Pendências que aguardam esta referência (para reprocessar quando ela chegar). */
   findPendingDependents(providerId: string, referenceExternalTransactionId: string): Promise<string[]>;
 }
 
@@ -45,7 +41,6 @@ export interface OutboxRepository {
 
 export interface InboxRepository {
   find(consumerName: string, messageId: string): Promise<InboxMessage | undefined>;
-  /** Insere já processada, com a transação associada. */
   insertProcessed(message: InboxMessage, transactionId: string | undefined): Promise<void>;
 }
 
@@ -57,10 +52,6 @@ export interface Repositories {
   inbox: InboxRepository;
 }
 
-/**
- * Fronteira transacional. `transaction` abre UMA transação SQL; tudo o que é gravado
- * pelos repositórios recebidos é confirmado junto, ou nada é.
- */
 export abstract class UnitOfWork {
   abstract transaction<T>(work: (repos: Repositories) => Promise<T>): Promise<T>;
   abstract read<T>(work: (repos: Repositories) => Promise<T>): Promise<T>;

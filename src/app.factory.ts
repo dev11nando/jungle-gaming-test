@@ -16,7 +16,6 @@ export function createLogger(): JsonLogger {
   });
 }
 
-/** Configuração comum à aplicação real e aos testes e2e. */
 export function configureApp(app: INestApplication): INestApplication {
   app.use(json({ limit: '64kb' }));
   app.use(correlationMiddleware);

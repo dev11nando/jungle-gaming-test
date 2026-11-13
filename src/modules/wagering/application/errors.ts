@@ -1,6 +1,5 @@
 import { DomainError } from '../../../shared/domain/domain-error';
 
-/** Recurso ausente (404). */
 export class NotFoundError extends DomainError {
   constructor(
     readonly code: string,
@@ -10,7 +9,6 @@ export class NotFoundError extends DomainError {
   }
 }
 
-/** Conflito de estado (409): wallet duplicada, idempotency key com outro payload, etc. */
 export class ConflictError extends DomainError {
   constructor(
     readonly code: string,
@@ -20,7 +18,6 @@ export class ConflictError extends DomainError {
   }
 }
 
-/** Provedor autenticado diferente do provedor da operação (403). */
 export class ForbiddenProviderError extends DomainError {
   readonly code = 'PROVIDER_MISMATCH';
   constructor() {
@@ -28,10 +25,6 @@ export class ForbiddenProviderError extends DomainError {
   }
 }
 
-/**
- * Falha transitória de infraestrutura (503): banco fora, timeout de lock, deadlock,
- * serialização. O cliente pode reenviar a mesma requisição com segurança.
- */
 export class TransientInfrastructureError extends Error {
   readonly code = 'TRANSIENT_INFRASTRUCTURE_ERROR';
   constructor(
@@ -44,7 +37,6 @@ export class TransientInfrastructureError extends Error {
   }
 }
 
-/** Violação de unicidade traduzida pela persistência, com o nome da constraint. */
 export class UniqueViolationError extends Error {
   constructor(readonly constraint: string | undefined) {
     super(`unique violation${constraint ? ` (${constraint})` : ''}`);
@@ -52,7 +44,6 @@ export class UniqueViolationError extends Error {
   }
 }
 
-/** UPDATE condicionado à versão não afetou linha: alguém escreveu sem o lock. */
 export class StaleWriteError extends Error {
   constructor(message: string) {
     super(message);

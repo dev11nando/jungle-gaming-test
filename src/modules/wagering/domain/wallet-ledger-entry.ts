@@ -10,17 +10,12 @@ export interface CreateLedgerEntryProps {
   money: Money;
   balanceBefore: Money;
   balanceAfter: Money;
-  /** Versão da wallet depois deste lançamento. */
   walletVersion: number;
   createdAt: Date;
 }
 
 export type LedgerEntryState = CreateLedgerEntryProps;
 
-/**
- * Lançamento imutável. Não há campo mutável nem método de transição:
- * todos os campos são `readonly` e o objeto é congelado.
- */
 export class WalletLedgerEntry {
   private constructor(
     public readonly id: string,
@@ -54,7 +49,6 @@ export class WalletLedgerEntry {
     return WalletLedgerEntry.build(state);
   }
 
-  /** balanceBefore ± money === balanceAfter */
   isBalanced(): boolean {
     const expected =
       this.direction === LedgerDirection.Credit
@@ -63,7 +57,6 @@ export class WalletLedgerEntry {
     return expected.equals(this.balanceAfter);
   }
 
-  /** Efeito com sinal no saldo: +money para crédito, -money para débito. */
   signedAmount(): Money {
     return this.direction === LedgerDirection.Credit ? this.money : this.money.negate();
   }

@@ -14,10 +14,6 @@ function key(labels: Labels | undefined): string {
   return entries.map(([k, v]) => `${k}="${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',');
 }
 
-/**
- * Registro em memória, exposto em formato texto Prometheus em GET /metrics.
- * Métrica é por processo: cada instância expõe a sua (o scraper agrega).
- */
 export class PrometheusMetrics extends Metrics {
   private readonly counters = new Map<string, Map<string, number>>();
   private readonly gauges = new Map<string, Map<string, number>>();
@@ -45,7 +41,6 @@ export class PrometheusMetrics extends Metrics {
     series.set(k, h);
   }
 
-  /** Valor atual de um contador (soma de séries cujo rótulo contém o filtro). Útil em testes. */
   counter(name: string, labels?: Labels): number {
     const series = this.counters.get(name);
     if (series === undefined) return 0;

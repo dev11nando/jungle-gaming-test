@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { MoneyProps } from './money';
 
-/** Subconjunto de campos de negócio que entra no hash. Transporte e header ficam de fora. */
 export interface WagerBusinessPayload {
   providerId: string;
   externalTransactionId: string;
@@ -16,10 +15,6 @@ export interface WagerBusinessPayload {
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json | undefined };
 
-/**
- * JSON canônico: chaves ordenadas por code point em todos os níveis, sem espaços,
- * campos `undefined` omitidos (nunca gravados como null).
- */
 export function canonicalJson(value: Json | undefined): string {
   if (value === undefined) {
     throw new TypeError('cannot canonicalize undefined');
@@ -39,7 +34,6 @@ export function canonicalJson(value: Json | undefined): string {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 }
 
-/** SHA-256 hex do JSON canônico do payload de negócio. `amount` já normalizado para escala 2. */
 export function wagerPayloadHash(payload: WagerBusinessPayload): string {
   const business: WagerBusinessPayload = {
     providerId: payload.providerId,

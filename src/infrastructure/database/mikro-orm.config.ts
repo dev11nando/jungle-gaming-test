@@ -3,7 +3,6 @@ import { defineConfig, MikroORM, type Options } from '@mikro-orm/postgresql';
 import { Migration20261113000000_initial_schema } from './migrations/Migration20261113000000_initial_schema';
 import { ALL_SCHEMAS } from './records';
 
-/** Lista explícita: sem glob de arquivos (funciona igual no Bun, em testes e no container). */
 export const MIGRATIONS = [
   { name: 'Migration20261113000000_initial_schema', class: Migration20261113000000_initial_schema },
 ];

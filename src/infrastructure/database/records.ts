@@ -1,11 +1,5 @@
 import { EntitySchema } from '@mikro-orm/core';
 
-/**
- * Modelos de persistência (EntitySchema, sem decorators). O domínio não os conhece:
- * os repositórios traduzem record ↔ agregado via `rehydrate`.
- * Valores monetários são `numeric(19,2)` lidos como string — nunca `number`.
- */
-
 export class WalletRecord {
   id!: string;
   playerId!: string;

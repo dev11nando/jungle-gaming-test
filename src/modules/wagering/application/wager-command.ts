@@ -4,7 +4,6 @@ import { wagerPayloadHash } from '../domain/payload-hash';
 import { INTERNAL_PROVIDER_ID } from '../domain/wager-transaction';
 import { SUBMITTABLE_KINDS, WagerTransactionKind } from '../domain/wagering-types';
 
-/** Comando único para HTTP e SQS: mesma validação, mesmo hash, mesmo caso de uso. */
 export interface SubmitWagerCommand {
   idempotencyKey: string;
   payloadHash: string;
@@ -55,7 +54,6 @@ export function parseMoney(value: unknown, field = 'money'): Money {
   return Money.from({ amount: obj.amount as string, currency: obj.currency as string });
 }
 
-/** Valida o corpo + header. Lança InvalidInputError (400) para qualquer violação de contrato. */
 export function parseSubmitWagerCommand(body: unknown, idempotencyKeyHeader: unknown): SubmitWagerCommand {
   if (typeof idempotencyKeyHeader !== 'string' || idempotencyKeyHeader.trim() === '') {
     throw new InvalidInputError('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key header is required');

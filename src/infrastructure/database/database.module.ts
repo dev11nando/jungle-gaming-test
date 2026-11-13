@@ -3,7 +3,6 @@ import { MikroORM } from '@mikro-orm/postgresql';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { initOrm } from './mikro-orm.config';
 
-/** Uma instância de MikroORM (um pool) por processo, compartilhada por API e workers. */
 @Global()
 @Module({
   providers: [

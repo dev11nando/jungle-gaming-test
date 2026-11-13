@@ -60,7 +60,6 @@ export function transactionFromRecord(r: WagerTransactionRecord): WagerTransacti
   });
 }
 
-/** O saldo resultante é gravado na moeda da wallet (que pode diferir da operação rejeitada por CURRENCY_MISMATCH). */
 export function transactionToRecord(tx: WagerTransaction): WagerTransactionRecord {
   const resultCurrencyMatches = tx.resultBalance === undefined || tx.resultBalance.currency === tx.money.currency;
   return {
@@ -80,7 +79,7 @@ export function transactionToRecord(tx: WagerTransaction): WagerTransactionRecor
     referenceTransactionId: tx.referenceTransactionId ?? null,
     status: tx.status,
     failureCode: tx.failureCode ?? null,
-    // Em CURRENCY_MISMATCH o saldo observado está em outra moeda; não o gravamos com a moeda errada.
+    // Em CURRENCY_MISMATCH o saldo observado está em outra moeda e não cabe nesta coluna.
     resultBalanceAmount: resultCurrencyMatches ? (tx.resultBalance?.amount ?? null) : null,
     resultWalletVersion: tx.resultWalletVersion ?? null,
     referenceAttempts: tx.referenceAttempts,

@@ -6,7 +6,6 @@ const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 
 export type RequestWithCorrelation = Request & { correlationId?: string };
 
-/** Propaga `X-Correlation-Id` (ou gera um) e devolve no response. */
 export function correlationMiddleware(req: RequestWithCorrelation, res: Response, next: NextFunction): void {
   const incoming = req.header('x-correlation-id');
   const id = incoming !== undefined && SAFE_ID.test(incoming) ? incoming : uuidV7();

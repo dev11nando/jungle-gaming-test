@@ -2,7 +2,7 @@ import type { LoggerService, LogLevel } from '@nestjs/common';
 
 const LEVELS: Record<string, number> = { fatal: 0, error: 1, warn: 2, log: 3, info: 3, debug: 4, verbose: 5 };
 
-/** Campos de contexto permitidos. Nada de payload financeiro completo, token ou segredo. */
+// Campos fora da lista são descartados, para não vazar payload financeiro ou token.
 const ALLOWED_FIELDS = new Set([
   'msg',
   'correlationId',
@@ -34,10 +34,6 @@ const ALLOWED_FIELDS = new Set([
   'instanceId',
 ]);
 
-/**
- * Logger JSON de uma linha por evento. Aceita objeto estruturado ou string.
- * Campos fora da lista permitida são descartados (defesa contra vazar payload).
- */
 export class JsonLogger implements LoggerService {
   private readonly threshold: number;
 

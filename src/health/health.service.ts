@@ -45,9 +45,7 @@ export class HealthService implements OnModuleDestroy {
       this.checkKeycloak(),
     ]);
     const checks = { postgres, sqs, keycloak };
-    // Readiness depende só do que o serviço precisa para processar: PostgreSQL e SQS.
-    // Keycloak é informativo: o JWKS já carregado continua validando tokens se o IdP piscar,
-    // e a fila não passa pelo IdP. Tirar a instância do balanceador por isso derrubaria o consumo.
+    // Keycloak não entra: o JWKS em cache segue validando tokens e a fila não depende do IdP.
     const status = postgres === 'up' && sqs === 'up' ? 'ok' : 'down';
     return { status, checks };
   }

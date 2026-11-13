@@ -7,7 +7,6 @@ export interface IntegrationEventProps<T> {
   data: T;
 }
 
-/** Contexto que o caso de uso fornece para montar eventos. */
 export interface EventContext {
   newEventId: () => string;
   correlationId: string;
@@ -26,10 +25,6 @@ export interface IntegrationEventEnvelope<T = unknown> {
   data: T;
 }
 
-/**
- * Envelope de evento de integração. `eventType` e `version` pertencem ao tipo concreto.
- * `data` precisa ser JSON estável: dinheiro como MoneyProps, nunca a instância de Money.
- */
 export abstract class IntegrationEvent<T> {
   abstract readonly eventType: string;
   abstract readonly version: number;
