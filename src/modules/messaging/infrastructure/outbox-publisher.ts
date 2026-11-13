@@ -4,6 +4,8 @@ import { METRIC, type Metrics } from '../../../shared/application/metrics';
 import type { ClaimedOutboxMessage, OutboxStore } from './outbox-store';
 import { sleep, type QueueUrls } from './sqs';
 
+const SQS_BATCH_LIMIT = 10;
+
 export interface PublisherOptions {
   workerId: string;
   eventsQueueName: string;
@@ -41,10 +43,15 @@ export class OutboxPublisher {
   }
 
   async publishOnce(): Promise<number> {
-    const batchSize = this.options.batchSize ?? 10;
+    const batchSize = this.options.batchSize ?? 100;
     const claimed = await this.store.claim(this.options.workerId, batchSize, this.options.leaseSeconds ?? 30);
-    if (claimed.length > 0) {
-      await this.publish(claimed);
+    const chunks: ClaimedOutboxMessage[][] = [];
+    for (let i = 0; i < claimed.length; i += SQS_BATCH_LIMIT) chunks.push(claimed.slice(i, i + SQS_BATCH_LIMIT));
+    const published = await Promise.all(chunks.map((chunk) => this.send(chunk)));
+    const succeeded = published.flat();
+    if (succeeded.length > 0) {
+      await this.options.afterPublish?.(succeeded);
+      await this.store.markPublished(succeeded, this.options.workerId);
     }
     const backlog = await this.store.backlog();
     this.metrics.setGauge(METRIC.outboxPending, backlog.pending);
@@ -60,13 +67,13 @@ export class OutboxPublisher {
       } catch (error) {
         this.logger.warn({ msg: 'outbox cycle failed', error: error instanceof Error ? error.name : 'Error' });
       }
-      if (published < (this.options.batchSize ?? 10)) {
+      if (published < (this.options.batchSize ?? 100)) {
         await sleep(this.options.idleDelayMs ?? 200, this.abort.signal);
       }
     }
   }
 
-  private async publish(claimed: ClaimedOutboxMessage[]): Promise<void> {
+  private async send(claimed: ClaimedOutboxMessage[]): Promise<string[]> {
     const byId = new Map(claimed.map((c) => [c.message.id, c.message]));
     let succeeded: string[] = [];
     const failed: { id: string; error: string }[] = [];
@@ -94,8 +101,6 @@ export class OutboxPublisher {
     }
 
     if (succeeded.length > 0) {
-      await this.options.afterPublish?.(succeeded);
-      await this.store.markPublished(succeeded, this.options.workerId);
       const now = Date.now();
       for (const id of succeeded) {
         const m = byId.get(id);
@@ -109,5 +114,6 @@ export class OutboxPublisher {
       await this.store.markFailed(m, this.options.workerId, f.error, new Date());
       this.metrics.increment(METRIC.outboxFailures, { error: f.error });
     }
+    return succeeded;
   }
 }

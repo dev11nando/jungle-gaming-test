@@ -17,6 +17,7 @@ export interface ConsumerOptions {
   visibilityTimeoutSeconds: number;
   waitTimeSeconds: number;
   batchSize?: number;
+  pollers?: number;
   shutdownGraceMs?: number;
   /** Ponto de injeção de falha para testes de crash entre commit e ack. */
   beforeAck?: (message: Message, outcome: HandleOutcome) => Promise<void> | void;
@@ -26,7 +27,7 @@ export class SqsWagerConsumer {
   private readonly logger = new Logger(SqsWagerConsumer.name);
   private running = false;
   private stopping = false;
-  private loop?: Promise<void>;
+  private loops: Promise<void>[] = [];
   private readonly abort = new AbortController();
   private readonly inFlight = new Set<Promise<void>>();
 
@@ -41,7 +42,8 @@ export class SqsWagerConsumer {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.loop = this.run();
+    // FIFO não entrega o mesmo grupo a dois receivers enquanto há mensagem em voo.
+    this.loops = Array.from({ length: this.options.pollers ?? 4 }, () => this.run());
   }
 
   async stop(): Promise<void> {
@@ -50,7 +52,7 @@ export class SqsWagerConsumer {
     this.running = false;
     this.abort.abort();
     const grace = this.options.shutdownGraceMs ?? 20_000;
-    await Promise.race([Promise.allSettled([this.loop, ...this.inFlight]), sleep(grace)]);
+    await Promise.race([Promise.allSettled([...this.loops, ...this.inFlight]), sleep(grace)]);
   }
 
   private async run(): Promise<void> {

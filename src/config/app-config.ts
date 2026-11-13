@@ -9,6 +9,7 @@ export interface SqsConfig {
   maxReceiveCount: number;
   visibilityTimeoutSeconds: number;
   waitTimeSeconds: number;
+  pollers: number;
 }
 
 export type WorkerName = 'consumer' | 'outbox' | 'pending-reference';
@@ -45,6 +46,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       maxReceiveCount: parseIntIn(optional(env, 'SQS_MAX_RECEIVE_COUNT', '5'), 1, 1000, 'SQS_MAX_RECEIVE_COUNT'),
       visibilityTimeoutSeconds: parseIntIn(optional(env, 'SQS_VISIBILITY_TIMEOUT_SECONDS', '30'), 1, 43200, 'SQS_VISIBILITY_TIMEOUT_SECONDS'),
       waitTimeSeconds: parseIntIn(optional(env, 'SQS_WAIT_TIME_SECONDS', '10'), 0, 20, 'SQS_WAIT_TIME_SECONDS'),
+      pollers: parseIntIn(optional(env, 'SQS_POLLERS', '4'), 1, 32, 'SQS_POLLERS'),
     },
     keycloak: {
       issuer: required(env, 'KEYCLOAK_ISSUER'),

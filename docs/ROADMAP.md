@@ -1,6 +1,6 @@
 # Roadmap
 
-Cada fase só começa com a anterior estável. Fases 1 a 7 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
+Cada fase só começa com a anterior estável. Todas as fases concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
 
 ## Fase 1 — Esqueleto ✅
 
@@ -66,8 +66,8 @@ Postgres e LocalStack reais. Paralelismo de verdade, não mock sequencial.
 
 Todo arquivo que mexe em saldo termina com `assertAllWalletsReconcile`: `wallet.balance` igual ao saldo reconstruído pelo ledger, para todas as wallets do banco.
 
-## Fase 8 — Observabilidade
+## Fase 8 — Observabilidade ✅
 
-Logs JSON (Pino) com `correlationId`, `messageId`, `transactionId`, `walletId` e `providerId`, sem payload financeiro completo. Métricas: transações por status, duplicatas, retries, DLQ, conflitos de lock, lag da outbox e latência.
+Logs JSON (`JsonLogger`, lista permitida de campos) com `correlationId`, `messageId`, `transactionId`, `walletId` e `providerId`, sem payload financeiro completo. Métricas: transações por status, duplicatas, retries, DLQ, conflitos de lock, lag da outbox e latência.
 
-Carga, se entrar: `bun run test:load`, com ambiente, metodologia, throughput, p50/p95/p99, taxa de erro, conflitos e lag. Sem meta de RPS.
+Carga: `bun run test:load`, com metodologia e análise em [load-test.md](load-test.md).

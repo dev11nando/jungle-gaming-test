@@ -2,7 +2,7 @@
 
 Processador de apostas com uma regra de ouro: o PostgreSQL confirma saldo, ledger, inbox e outbox na mesma transação, ou não confirma nada. SQS entrega at-least-once e pode reordenar. Várias instâncias podem tocar a mesma wallet. A correção não depende de cache em memória nem de fila FIFO.
 
-Estado atual (ver [docs/ROADMAP.md](docs/ROADMAP.md)): domínio, schema, API HTTP, consumidor SQS com inbox/DLQ, publisher da outbox com lease e worker de referência pendente, testados contra PostgreSQL e LocalStack reais.
+Todas as fases do [roadmap](docs/ROADMAP.md) estão implementadas e testadas contra PostgreSQL e LocalStack reais, inclusive com três instâncias em processos separados. Resultado de carga em [docs/load-test.md](docs/load-test.md).
 
 ## Fluxo
 
@@ -38,7 +38,7 @@ flowchart TD
 
 A entrada HTTP e a entrada da fila chamam o mesmo caso de uso. A diferença é a borda:
 
-- HTTP exige Bearer JWT. O claim `provider_id` tem de ser o mesmo `providerId` do corpo. Quem compara é o caso de uso (`assertSameProvider`), não um `if` solto no controller.
+- HTTP exige Bearer JWT. O claim `provider_id` tem de ser o mesmo `providerId` do corpo (senão 403 `PROVIDER_MISMATCH`). O controller lê a identidade pela `ProviderIdentityPort` e compara antes de chamar o caso de uso, que não conhece JWT.
 - A fila é canal interno. Não há assinatura na mensagem nesta versão. O `providerId` do payload continua passando pela validação de domínio: existe, cabe na operação, e a referência resolvida pertence a esse provedor.
 
 Ack da mensagem só depois do commit. Se o processo morre no meio, a transação SQL desfaz. Se morre depois do commit e antes do ack, a reentrega encontra a inbox ou a idempotency key e não aplica o efeito de novo.
@@ -92,7 +92,9 @@ Status `PROCESSED`, `REJECTED` e `FAILED` são terminais. Transição a partir d
 Transições aceitas:
 
 - `PENDING` → `PROCESSED` | `PENDING_REFERENCE` | `REJECTED` | `FAILED`
-- `PENDING_REFERENCE` → `PROCESSED` | `REJECTED` | `FAILED`
+- `PENDING_REFERENCE` → `PROCESSED` | `PENDING_REFERENCE` (nova tentativa agendada) | `REJECTED` | `FAILED`
+
+No banco, um trigger recusa qualquer `UPDATE` em linha terminal e qualquer volta para `PENDING`.
 
 `REJECTED` não altera saldo e não gera ledger. Repetir uma operação já terminada devolve o resultado original, inclusive o saldo observado naquele momento. Esse saldo é gravado na transação no commit. Não se relê o saldo atual da wallet para montar o replay.
 
@@ -207,11 +209,9 @@ Rejeições persistidas (`status = REJECTED`, HTTP 422, evento `WagerTransaction
 
 Erros de contrato, que não viram linha (HTTP 400, ou 404 para wallet): `INVALID_MONEY`, `INVALID_FIELD`, `INVALID_KIND`, `REFERENCE_REQUIRED`, `INVALID_REFERENCE` (autorreferência), `OPENING_NOT_SUBMITTABLE`, `WALLET_NOT_FOUND`. Não são persistidos porque o payload não descreve uma operação válida — não há o que auditar além do log.
 
-`FAILED` usa `PERMANENT_PROCESSING_ERROR` para erro permanente de infraestrutura (mensagem que nunca poderá ser aplicada).
-
 Conflito de idempotência (mesma chave, outro hash) não é failure code de transação: a segunda requisição não vira linha. A resposta é 409.
 
-`FAILED` fica reservado para erro permanente de infraestrutura, com código próprio quando a fase de mensageria precisar distinguir poison message de rejeição de negócio. Rejeição de regra continua `REJECTED`.
+`FAILED` (com `PERMANENT_PROCESSING_ERROR`) existe no modelo e no schema para erro permanente de infraestrutura, mas nenhum fluxo o grava hoje: mensagem que não pode ser aplicada vai para a DLQ com o motivo (ver Mensageria). Rejeição de regra é sempre `REJECTED`.
 
 ## HTTP
 
@@ -282,7 +282,7 @@ MikroORM 6 (`@mikro-orm/postgresql`), pelo `EntityManager.transactional()`, `Loc
 
 Mapeamento do `Money`: duas colunas, `*_amount numeric(19,2)` e `currency char(3)`. O MikroORM devolve `decimal` como string (`"975.00"`), que vira `bigint` de centavos em `Money.fromStored`. Nenhum valor monetário passa por `number` em nenhum ponto.
 
-Estratégia transacional: uma transação SQL por operação, aberta por `em.transactional()`. Dentro dela, a ordem de escrita é explícita (wallet → transação → ledger → inbox → outbox) em vez de depender do cálculo de ordem do Unit of Work, porque os records não declaram relações e as FKs não são diferíveis. O `UPDATE` do saldo é condicional à versão lida (`where id = ? and version = ?`) e precisa afetar exatamente uma linha.
+Estratégia transacional: uma transação SQL por operação, aberta por `em.transactional()`. Dentro dela, a ordem de escrita é explícita (lock da wallet → transação → `UPDATE` do saldo → ledger → outbox → inbox) em vez de depender do cálculo de ordem do Unit of Work, porque os records não declaram relações e as FKs não são diferíveis. O `UPDATE` do saldo é condicional à versão lida (`where id = ? and version = ?`) e precisa afetar exatamente uma linha.
 
 Migrations versionadas, com `up` e `down`, registradas explicitamente em `migrationsList` (sem glob de arquivos). `bun run db:migrate`, `db:migrate:down`, `db:migrate:status`. Prisma fica de fora.
 
@@ -304,6 +304,18 @@ Segredos do realm (`provider-a-secret`, admin/admin) são de desenvolvimento. N�
 - **Métricas**: `GET /metrics` (público, formato Prometheus, por instância). Já emitidas: `wagering_transactions_total{status,kind,replay}`, `wagering_duplicates_total`, `wagering_idempotency_conflicts_total`, `wagering_lock_conflicts_total{reason}`, `wagering_retries_total{reason}`, `wagering_processing_seconds` (histograma), `wagering_reconciliation_divergences_total`. Mensageria: `wagering_sqs_messages_total{action,reason}`, `wagering_dlq_messages_total{reason}`, `wagering_outbox_published_total`, `wagering_outbox_failures_total`, `wagering_outbox_pending`, `wagering_outbox_lag_seconds` (idade do evento pendente mais antigo), `wagering_outbox_publish_delay_seconds` (histograma commit → publicação) e `wagering_pending_reference_total{outcome}`.
 - **Health**: `/health/live` só diz que o processo responde. `/health/ready` exige PostgreSQL e SQS; Keycloak aparece no relatório, mas não derruba o readiness — o JWKS já carregado continua validando tokens, e a fila não depende do IdP.
 
+## Testes
+
+| Camada | Comando | O que prova |
+| --- | --- | --- |
+| Unidade | `bun run test` | Money, Wallet, ledger, regras de cada kind, transições, hash de idempotência, eventos |
+| Integração | `bun run test:integration` | migrations e cada constraint/trigger; casos de uso sob concorrência real; consumidor, outbox e pendências contra LocalStack |
+| E2E | `bun run test:e2e` | aplicação Nest completa, guard real, mapa de status HTTP |
+| Cluster | `bun run test:cluster` | 3 processos reais, HTTP + SQS concorrentes, SIGKILL e reinício |
+| Carga | `bun run test:load` | throughput, latência, conflitos e lag da outbox ([docs/load-test.md](docs/load-test.md)) |
+
+Nenhum teste substitui PostgreSQL ou SQS por mock; o único dublê é o resolvedor de chaves JWT. Cada cenário obrigatório do enunciado está mapeado para o teste correspondente em [docs/ROADMAP.md](docs/ROADMAP.md#fase-7--corrida-e-falha--bun-run-testcluster).
+
 ## Trade-offs
 
 - Lock pessimista por wallet em vez de só otimista. A wallet quente serializa na linha. O custo é uma aposta esperar a outra na mesma wallet. Wallets diferentes não se esperam. Retry otimista sob duas apostas de 80.00 geraria mais escrita falha do que o `FOR UPDATE`.
@@ -321,4 +333,5 @@ Segredos do realm (`provider-a-secret`, admin/admin) são de desenvolvimento. N�
 - Sem reversão parcial e sem ledger de partidas dobradas.
 - Moeda operacional única (BRL), com o tipo preparado para recusar outra moeda.
 - Keycloak em `start-dev`. O hostname do token é `localhost`, e o container da API busca o JWKS em `http://keycloak:8080` mantendo o `iss` em `http://localhost:8080/realms/jungle`.
-- Teste de carga não faz parte desta fase.
+- O teste de carga roda cliente, aplicação e infraestrutura na mesma máquina; os números são de ordem de grandeza ([docs/load-test.md](docs/load-test.md)).
+- Em Windows, encerrar um processo filho é sempre abrupto: o shutdown gracioso por SIGTERM é testado in-process, não entre processos.
