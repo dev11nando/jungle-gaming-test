@@ -1,6 +1,5 @@
 export type Labels = Readonly<Record<string, string>>;
 
-/** Porta de métricas. A aplicação conta eventos; a infraestrutura decide como expor. */
 export abstract class Metrics {
   abstract increment(name: string, labels?: Labels, value?: number): void;
   abstract observe(name: string, value: number, labels?: Labels): void;
@@ -24,7 +23,6 @@ export const METRIC = {
   pendingReferenceResolved: 'wagering_pending_reference_total',
 } as const;
 
-/** Implementação nula, útil em testes de unidade. */
 export class NoopMetrics extends Metrics {
   increment(): void {}
   observe(): void {}

@@ -6,11 +6,8 @@ import { WalletLedgerEntry } from './wallet-ledger-entry';
 
 export interface ProcessWagerInput {
   transaction: WagerTransaction;
-  /** Wallet já protegida por lock pelo chamador. */
   wallet: Wallet;
-  /** Transação referenciada, resolvida por (providerId, referenceExternalTransactionId). */
   reference?: WagerTransaction;
-  /** Já existe uma reversão PROCESSED (REFUND ou ROLLBACK) apontando para a referência. */
   referenceAlreadyReversed: boolean;
   newLedgerEntryId: () => string;
   now: Date;
@@ -29,10 +26,6 @@ const ALLOWED_REFERENCE_KINDS: Partial<Record<WagerTransactionKind, readonly Wag
   [WagerTransactionKind.Rollback]: [WagerTransactionKind.Bet, WagerTransactionKind.Win, WagerTransactionKind.Refund],
 };
 
-/**
- * Serviço de domínio: aplica as regras de BET/WIN/LOSS/REFUND/ROLLBACK
- * sobre uma wallet travada. Puro — não conhece banco nem fila.
- */
 export function processWager(input: ProcessWagerInput): ProcessWagerOutcome {
   const { transaction: tx, wallet, reference, now } = input;
   if (tx.isTerminal()) {

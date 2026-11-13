@@ -11,11 +11,6 @@ export interface RequestWithIdentity {
   identity?: ProviderIdentity;
 }
 
-/**
- * Porta de leitura da identidade do request.
- * A fila, quando passar a carregar identidade assinada, ganha outro adapter
- * atrás desta mesma porta. O caso de uso não conhece JWT.
- */
 export abstract class ProviderIdentityPort {
   abstract current(): ProviderIdentity | undefined;
 }

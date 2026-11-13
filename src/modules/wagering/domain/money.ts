@@ -1,6 +1,5 @@
 import { InvalidInputError } from '../../../shared/domain/domain-error';
 
-/** Contrato de borda (HTTP, SQS, eventos). */
 export interface MoneyProps {
   amount: string;
   currency: string;
@@ -14,25 +13,18 @@ export class CurrencyMismatchError extends InvalidInputError {
 
 const SCALE = 2;
 const FACTOR = 100n;
-/** Inteiro sem sinal, opcionalmente com 1 ou 2 casas. Sem expoente, sem espaços, sem "+". */
 const INPUT_AMOUNT = /^(0|[1-9]\d{0,16})(\.\d{1,2})?$/;
-/** Mesma gramática, com sinal opcional — usada só para reidratar valores já persistidos. */
 const STORED_AMOUNT = /^-?(0|[1-9]\d{0,16})(\.\d{1,2})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
-/** Teto de numeric(19,2): 17 dígitos inteiros. */
+// Teto de numeric(19,2).
 const MAX_MINOR = 10n ** 19n - 1n;
 
-/**
- * Valor monetário imutável. Internamente um `bigint` de unidades menores (centavos),
- * escala fixa 2. Nenhuma operação usa `number`.
- */
 export class Money {
   private constructor(
     private readonly minor: bigint,
     public readonly currency: string,
   ) {}
 
-  /** Entrada de contrato: rejeita negativo, mais de 2 casas, notação científica, NaN, Infinity. */
   static from(props: MoneyProps): Money {
     if (props === null || typeof props !== 'object') {
       throw new InvalidInputError('INVALID_MONEY', 'money must be an object');
@@ -47,7 +39,6 @@ export class Money {
     return new Money(Money.toMinor(props.amount), currency);
   }
 
-  /** Reidratação de valor persistido (numeric como string). Aceita sinal. */
   static fromStored(amount: string, currency: string): Money {
     if (!STORED_AMOUNT.test(amount)) {
       throw new InvalidInputError('INVALID_MONEY', `invalid stored amount: ${amount}`);
@@ -102,7 +93,6 @@ export class Money {
     return this.currency === other.currency && this.minor === other.minor;
   }
 
-  /** Decimal com escala fixa 2, ex.: "25.00", "-3.10". */
   get amount(): string {
     const negative = this.minor < 0n;
     const abs = negative ? -this.minor : this.minor;

@@ -4,7 +4,6 @@ export enum LedgerDirection {
 }
 
 export enum WagerTransactionKind {
-  /** Interno: crédito de abertura da wallet. Nunca entra pela API nem pela fila. */
   Opening = 'OPENING',
   Bet = 'BET',
   Win = 'WIN',
@@ -21,10 +20,6 @@ export enum WagerTransactionStatus {
   Failed = 'FAILED',
 }
 
-/**
- * Taxonomia estável de falhas. Ver ARCHITECTURE.md § Failure codes.
- * Rejeições de negócio (REJECTED) e falhas permanentes (FAILED) usam o mesmo tipo.
- */
 export enum FailureCode {
   InsufficientFunds = 'INSUFFICIENT_FUNDS',
   ReversalWouldGoNegative = 'REVERSAL_WOULD_GO_NEGATIVE',
@@ -36,7 +31,6 @@ export enum FailureCode {
   ReferenceScopeMismatch = 'REFERENCE_SCOPE_MISMATCH',
   AmountMismatch = 'AMOUNT_MISMATCH',
   AlreadyReversed = 'ALREADY_REVERSED',
-  /** FAILED: mensagem que nunca poderá ser processada (poison). */
   PermanentProcessingError = 'PERMANENT_PROCESSING_ERROR',
 }
 

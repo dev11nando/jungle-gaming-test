@@ -11,7 +11,6 @@ import type { SubmitWagerCommand } from './wager-command';
 export interface SubmitContext {
   correlationId: string;
   causationId?: string;
-  /** Presente quando a origem é a fila: grava a inbox na mesma transação SQL. */
   inbox?: { consumerName: string; messageId: string; payloadHash: string };
 }
 
@@ -20,7 +19,6 @@ export interface SubmitResult {
   idempotentReplay: boolean;
 }
 
-/** Tentativas extras quando um concorrente vence a corrida de unicidade: a próxima passada vira replay. */
 const MAX_UNIQUE_RACE_RETRIES = 2;
 
 @Injectable()
@@ -73,7 +71,6 @@ export class SubmitWagerTransaction {
 
   private async run(cmd: SubmitWagerCommand, ctx: SubmitContext): Promise<SubmitResult> {
     for (let attempt = 0; ; attempt += 1) {
-      // Caminho rápido, sem lock: replay de operação já registrada.
       const existing = await this.uow.read((r) => r.transactions.findByIdempotencyKey(cmd.idempotencyKey));
       if (existing !== undefined) {
         return this.replay(existing, cmd, ctx);
@@ -81,9 +78,8 @@ export class SubmitWagerTransaction {
       try {
         return await this.uow.transaction((repos) => this.firstSubmission(repos, cmd, ctx));
       } catch (error) {
+        // Um concorrente gravou a mesma chave; esta tentativa foi desfeita e a próxima vira replay.
         if (error instanceof UniqueViolationError && attempt < MAX_UNIQUE_RACE_RETRIES) {
-          // Outro processo gravou a mesma chave/inbox entre a leitura e o insert. Nada foi aplicado
-          // por esta tentativa (rollback); a próxima volta encontra a linha e responde como replay.
           this.metrics.increment(METRIC.retries, { reason: 'unique_race', constraint: error.constraint ?? 'unknown' });
           continue;
         }
@@ -101,8 +97,7 @@ export class SubmitWagerTransaction {
       throw new NotFoundError('WALLET_NOT_FOUND', `wallet ${cmd.walletId} not found`);
     }
 
-    // Com o lock da wallet, operações concorrentes na mesma wallet já estão serializadas:
-    // reler a chave aqui enxerga o commit de quem chegou antes.
+    // Releitura sob o lock da wallet: enxerga o commit de quem chegou antes.
     const duplicate = await repos.transactions.findByIdempotencyKey(cmd.idempotencyKey);
     if (duplicate !== undefined) {
       this.assertSamePayload(duplicate, cmd);
@@ -146,7 +141,6 @@ export class SubmitWagerTransaction {
   private async replay(existing: WagerTransaction, cmd: SubmitWagerCommand, ctx: SubmitContext): Promise<SubmitResult> {
     this.assertSamePayload(existing, cmd);
     if (ctx.inbox !== undefined) {
-      // Mesma operação chegando por outra mensagem: registra a entrega, sem novo efeito.
       try {
         await this.uow.transaction((repos) => this.recordInbox(repos, ctx, existing.id));
       } catch (error) {

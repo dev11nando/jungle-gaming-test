@@ -1,7 +1,6 @@
 import { loadAppConfig } from '../../config/app-config';
 import { initOrm } from './mikro-orm.config';
 
-/** Uso: bun src/infrastructure/database/migrate.ts [up|down|down:all|status] */
 async function main(): Promise<void> {
   const command = process.argv[2] ?? 'up';
   const databaseUrl = process.env.DATABASE_URL ?? loadAppConfig().databaseUrl;

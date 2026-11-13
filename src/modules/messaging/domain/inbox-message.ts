@@ -11,7 +11,6 @@ export interface InboxMessageState extends ReceiveInboxProps {
   processedAt?: Date;
 }
 
-/** Deduplicação de transporte por (consumerName, messageId). Não substitui a idempotency key. */
 export class InboxMessage {
   private constructor(
     public readonly messageId: string,
@@ -40,7 +39,6 @@ export class InboxMessage {
     return this._processedAt !== undefined;
   }
 
-  /** Mesma mensagem com outro conteúdo não é duplicata: é conflito. */
   matchesPayload(payloadHash: string): boolean {
     return this.payloadHash === payloadHash;
   }

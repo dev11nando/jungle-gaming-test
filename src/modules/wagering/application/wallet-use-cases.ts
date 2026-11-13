@@ -24,7 +24,6 @@ export class OpenWallet {
     @Inject(Clock) private readonly clock: Clock,
   ) {}
 
-  /** Wallet, OPENING e crédito de abertura (quando saldo > 0) na mesma transação SQL. */
   async execute(cmd: OpenWalletCommand, ctx: { correlationId: string }): Promise<Wallet> {
     const now = this.clock.now();
     const walletId = this.ids.next();
@@ -87,7 +86,6 @@ export class WalletQueries {
     return wallet;
   }
 
-  /** Cursor opaco = posição (identity) do último item, codificada. Estável sob inserts concorrentes. */
   async getLedger(walletId: string, cursor: string | undefined, limit: number): Promise<LedgerPage> {
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) {
       throw new InvalidInputError('INVALID_FIELD', `limit must be an integer between 1 and ${MAX_PAGE}`);
@@ -145,10 +143,6 @@ export class ReconcileWallet {
     @Inject(Metrics) private readonly metrics: Metrics,
   ) {}
 
-  /**
-   * Compara o saldo materializado com a soma do ledger numa leitura consistente
-   * (mesma transação, wallet travada para leitura estável). Nunca corrige.
-   */
   async execute(walletId: string, ctx: { correlationId: string }): Promise<ReconciliationReport> {
     const report = await this.uow.transaction(async (repos) => {
       const wallet = await repos.wallets.lockById(walletId);

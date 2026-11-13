@@ -1,10 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Clock, IdGenerator } from '../../modules/wagering/application/ports';
 
-/**
- * UUIDv7 (RFC 9562): 48 bits de timestamp em ms + aleatório. Ordenável no tempo,
- * o que mantém índices de PK compactos e ajuda leitura de logs.
- */
 export function uuidV7(now = Date.now()): string {
   const bytes = randomBytes(16);
   let ts = BigInt(now);

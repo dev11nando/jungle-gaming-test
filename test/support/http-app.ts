@@ -18,10 +18,6 @@ export interface TestHttpApp {
   close: () => Promise<void>;
 }
 
-/**
- * Sobe a aplicação real (todos os módulos, PostgreSQL real), trocando apenas a origem
- * das chaves JWT: tokens são assinados por um par RSA local em vez do Keycloak.
- */
 export async function startHttpApp(overrides: { provide: unknown; useValue: unknown }[] = []): Promise<TestHttpApp> {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   const { publicKey, privateKey } = await generateKeyPair('RS256');

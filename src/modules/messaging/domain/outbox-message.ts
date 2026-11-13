@@ -12,12 +12,10 @@ export interface OutboxMessageState {
   publishedAt?: Date;
 }
 
-/** Backoff de publicação: 1s · 2^n, teto de 5 minutos. A outbox nunca desiste: evento confirmado não se perde. */
 export const OUTBOX_RETRY_POLICY = { baseDelayMs: 1_000, maxDelayMs: 5 * 60_000 } as const;
 
 export class OutboxMessage {
   private constructor(
-    /** = eventId do envelope. Estável entre republicações. */
     public readonly id: string,
     public readonly aggregateId: string,
     public readonly eventType: string,
@@ -30,7 +28,6 @@ export class OutboxMessage {
 
   static enqueue(event: IntegrationEvent<unknown>): OutboxMessage {
     const envelope = event.toJSON();
-    // Garante que o payload é JSON puro (sem instâncias, sem undefined).
     const payload = JSON.parse(JSON.stringify(envelope)) as Record<string, unknown>;
     return new OutboxMessage(
       event.eventId,
@@ -73,7 +70,6 @@ export class OutboxMessage {
     this._nextAttemptAt = undefined;
   }
 
-  /** Incrementa attempts e agenda a próxima tentativa com backoff exponencial. */
   scheduleRetry(now: Date): void {
     if (!this.isPending()) {
       throw new InvalidTransactionStateError(`outbox message ${this.id} already published`);

@@ -81,7 +81,6 @@ describe('BET e idempotência', () => {
     expect(result.transaction.status).toBe(S.Processed);
     expect(result.transaction.resultBalance?.amount).toBe('975.00');
     expect(await ledgerSnapshot(pool, walletId)).toMatchObject({ balance: '975.00', ledger: '975.00', debits: 1 });
-    // Abertura (WalletBalanceChanged da wallet) + aposta (WalletBalanceChanged + WagerTransactionProcessed).
     expect(await outboxTypes([walletId, result.transaction.id])).toEqual([
       'WalletBalanceChanged',
       'WalletBalanceChanged',
@@ -155,7 +154,6 @@ describe('concorrência (paralelismo real no PostgreSQL)', () => {
     expect(rejected?.transaction.failureCode).toBe(FailureCode.InsufficientFunds);
     expect(await ledgerSnapshot(pool, walletId)).toMatchObject({ balance: '20.00', ledger: '20.00', debits: 1 });
 
-    // Retry das duas (inclusive concorrente) não duplica o débito.
     const retries = await Promise.all([
       svc.submit.execute(command(a), ctx),
       svc.submit.execute(command(b), ctx),
@@ -333,7 +331,6 @@ describe('atomicidade', () => {
       body.externalTransactionId,
     ]);
     expect(tx.rows[0].n).toBe(0);
-    // A mesma requisição, reenviada com a infraestrutura saudável, é aplicada uma vez.
     const ok = await svc.submit.execute(command(body), ctx);
     expect(ok.idempotentReplay).toBe(false);
     expect(await ledgerSnapshot(pool, walletId)).toMatchObject({ balance: '90.00' });
@@ -368,10 +365,10 @@ describe('ledger e reconciliação', () => {
 
   test('divergência é sinalizada e contada, nunca corrigida', async () => {
     const { walletId } = await wallet('100.00');
-    // Simula corrupção fora da aplicação, desligando a constraint trigger só para este UPDATE.
     const client = await pool.connect();
     try {
       await client.query('begin');
+      // Simula corrupção fora da aplicação.
       await client.query('alter table wallets disable trigger wallets_match_ledger');
       await client.query(`update wallets set balance_amount = 150 where id = $1`, [walletId]);
       await client.query('alter table wallets enable trigger wallets_match_ledger');
@@ -384,7 +381,6 @@ describe('ledger e reconciliação', () => {
     expect(r.difference.amount).toBe('50.00');
     expect(svc.metrics.counter('wagering_reconciliation_divergences_total')).toBe(1);
     expect((await svc.queries.getWallet(walletId)).balance.amount).toBe('150.00');
-    // Restaura para o invariante final do arquivo.
     const fix = await pool.connect();
     try {
       await fix.query('begin');

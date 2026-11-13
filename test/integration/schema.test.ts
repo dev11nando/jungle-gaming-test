@@ -99,7 +99,6 @@ async function insertEntry(
   return id;
 }
 
-/** Wallet aberta com 100.00 via OPENING, como o caso de uso faz. */
 async function openedWallet(balance = '100.00') {
   return inTransaction(pool, async (c) => {
     const walletId = await insertWallet(c, { balance });
@@ -109,7 +108,6 @@ async function openedWallet(balance = '100.00') {
   });
 }
 
-/** Aplica um débito como o caso de uso: transação, ledger e saldo no mesmo commit. */
 async function debit(walletId: string, amount: string, before: string, after: string, version: number) {
   return inTransaction(pool, async (c) => {
     const txId = await insertTx(c, walletId, { kind: 'BET', amount });

@@ -1,13 +1,7 @@
 import { Migration } from '@mikro-orm/migrations';
 
-/**
- * Schema inicial. As invariantes financeiras vivem aqui, não só no código:
- * unicidade, imutabilidade do ledger, não-negatividade, aritmética de cada lançamento,
- * encadeamento do ledger e equivalência saldo ↔ último lançamento (constraint trigger diferida).
- */
 export class Migration20261113000000_initial_schema extends Migration {
   override async up(): Promise<void> {
-    // ---------------------------------------------------------------- wallets
     this.addSql(`
       create table wallets (
         id              uuid primary key,
@@ -23,7 +17,6 @@ export class Migration20261113000000_initial_schema extends Migration {
       );
     `);
 
-    // ------------------------------------------------------ wager_transactions
     this.addSql(`
       create table wager_transactions (
         id                                 uuid primary key,
@@ -55,7 +48,6 @@ export class Migration20261113000000_initial_schema extends Migration {
 
         constraint wager_tx_idempotency_key_uq unique (idempotency_key),
         constraint wager_tx_provider_external_uq unique (provider_id, external_transaction_id),
-        -- alvo das FKs compostas do ledger: lançamento pertence à wallet e ao valor da transação
         constraint wager_tx_ledger_target_uq unique (id, wallet_id, amount, currency),
 
         constraint wager_tx_reference_required
@@ -78,8 +70,7 @@ export class Migration20261113000000_initial_schema extends Migration {
       );
     `);
 
-    // Uma única reversão PROCESSED (REFUND ou ROLLBACK) por transação referenciada.
-    // Tentativas rejeitadas não entram no índice e não bloqueiam uma futura válida.
+    // Só reversões PROCESSED entram no índice: uma rejeitada não bloqueia uma válida futura.
     this.addSql(`
       create unique index wager_tx_one_processed_reversal_uq
         on wager_transactions (reference_transaction_id)
@@ -97,7 +88,6 @@ export class Migration20261113000000_initial_schema extends Migration {
     `);
     this.addSql(`create index wager_tx_wallet_idx on wager_transactions (wallet_id, created_at);`);
 
-    // Transação terminal é imutável; campos de negócio nunca mudam; não há DELETE.
     this.addSql(`
       create function wager_transactions_guard() returns trigger
       language plpgsql as $fn$
@@ -131,7 +121,6 @@ export class Migration20261113000000_initial_schema extends Migration {
         for each row execute function wager_transactions_guard();
     `);
 
-    // ------------------------------------------------------------------ ledger
     this.addSql(`
       create table wallet_ledger_entries (
         id              uuid primary key,
@@ -161,7 +150,6 @@ export class Migration20261113000000_initial_schema extends Migration {
     `);
     this.addSql(`create index ledger_wallet_position_idx on wallet_ledger_entries (wallet_id, position);`);
 
-    // Append-only: nenhum UPDATE, DELETE ou TRUNCATE.
     this.addSql(`
       create function wallet_ledger_append_only() returns trigger
       language plpgsql as $fn$
@@ -181,7 +169,6 @@ export class Migration20261113000000_initial_schema extends Migration {
         for each statement execute function wallet_ledger_append_only();
     `);
 
-    // Encadeamento: balance_before de um lançamento = balance_after do lançamento da versão anterior.
     this.addSql(`
       create function wallet_ledger_chain() returns trigger
       language plpgsql as $fn$
@@ -211,7 +198,7 @@ export class Migration20261113000000_initial_schema extends Migration {
         for each row execute function wallet_ledger_chain();
     `);
 
-    // Saldo materializado = balance_after do lançamento da versão atual (verificado no commit).
+    // Diferida: saldo da wallet deve bater com o lançamento da versão atual no commit.
     this.addSql(`
       create function wallets_match_ledger() returns trigger
       language plpgsql as $fn$
@@ -246,7 +233,6 @@ export class Migration20261113000000_initial_schema extends Migration {
         for each row execute function wallets_match_ledger();
     `);
 
-    // ------------------------------------------------------------------- inbox
     this.addSql(`
       create table inbox_messages (
         consumer_name   varchar(128) not null,
@@ -259,7 +245,6 @@ export class Migration20261113000000_initial_schema extends Migration {
       );
     `);
 
-    // ------------------------------------------------------------------ outbox
     this.addSql(`
       create table outbox_messages (
         id               uuid primary key,

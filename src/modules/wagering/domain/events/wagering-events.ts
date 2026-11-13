@@ -42,7 +42,6 @@ function transactionData(tx: WagerTransaction): WagerTransactionEventData {
   return data;
 }
 
-/** Qualquer transação aplicada, inclusive LOSS. */
 export class WagerTransactionProcessed extends IntegrationEvent<WagerTransactionEventData> {
   readonly eventType = 'WagerTransactionProcessed';
   readonly version = 1;
@@ -52,7 +51,6 @@ export class WagerTransactionProcessed extends IntegrationEvent<WagerTransaction
   }
 }
 
-/** Transação rejeitada por regra de negócio (inclusive referência não encontrada no prazo). */
 export class WagerTransactionRejected extends IntegrationEvent<WagerTransactionEventData> {
   readonly eventType = 'WagerTransactionRejected';
   readonly version = 1;
@@ -62,7 +60,6 @@ export class WagerTransactionRejected extends IntegrationEvent<WagerTransactionE
   }
 }
 
-/** Referência ainda não recebida; a transação aguarda reprocessamento. */
 export class WagerTransactionPendingReference extends IntegrationEvent<WagerTransactionEventData> {
   readonly eventType = 'WagerTransactionPendingReference';
   readonly version = 1;
@@ -82,7 +79,6 @@ export interface WalletBalanceChangedData {
   walletVersion: number;
 }
 
-/** Somente quando o saldo muda. */
 export class WalletBalanceChanged extends IntegrationEvent<WalletBalanceChangedData> {
   readonly eventType = 'WalletBalanceChanged';
   readonly version = 1;

@@ -33,7 +33,6 @@ export function buildServices(orm: MikroORM, uow: UnitOfWork = new MikroOrmUnitO
   };
 }
 
-/** UnitOfWork que injeta falha no meio da transação, para provar atomicidade. */
 export class FailingUnitOfWork extends UnitOfWork {
   constructor(
     private readonly inner: UnitOfWork,
@@ -92,7 +91,6 @@ export async function ledgerSnapshot(pool: Pool, walletId: string) {
   return { ...row, ledger: Money.fromStored(row.ledger, 'BRL').amount };
 }
 
-/** Invariante final de todos os testes financeiros: wallet.balance == saldo reconstruído pelo ledger. */
 export async function assertAllWalletsReconcile(pool: Pool): Promise<void> {
   const { rows } = await pool.query<{ id: string; balance: string; ledger: string }>(
     `select w.id, w.balance_amount::text as balance,

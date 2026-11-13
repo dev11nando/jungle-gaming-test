@@ -11,11 +11,6 @@ import type { WagerTransaction } from '../domain/wager-transaction';
 import type { Wallet } from '../domain/wallet';
 import type { Repositories } from './ports';
 
-/**
- * Aplica uma transação sobre uma wallet JÁ TRAVADA, dentro da transação SQL do chamador,
- * e grava tudo o que a decisão produz: transação, saldo, ledger e eventos na outbox.
- * Compartilhado por submissão (HTTP/SQS) e pelo worker de PENDING_REFERENCE.
- */
 export async function applyToLockedWallet(params: {
   repos: Repositories;
   transaction: WagerTransaction;
@@ -61,7 +56,6 @@ export async function applyToLockedWallet(params: {
   } else if (outcome.type === 'REJECTED') {
     messages.push(OutboxMessage.enqueue(WagerTransactionRejected.from(tx, events)));
   } else if (params.isNew) {
-    // O evento de pendência sai uma vez, na entrada; novas tentativas sem sucesso não geram ruído.
     messages.push(OutboxMessage.enqueue(WagerTransactionPendingReference.from(tx, events)));
   }
   await repos.outbox.enqueue(messages);

@@ -14,9 +14,7 @@ export interface WalletState {
 }
 
 export interface LedgerMovement {
-  /** Id interno da WagerTransaction que causa o movimento. */
   transactionId: string;
-  /** Id do lançamento a ser criado. */
   entryId: string;
   at: Date;
 }
@@ -26,7 +24,6 @@ export interface OpenWalletProps {
   playerId: string;
   initialBalance: Money;
   at: Date;
-  /** Obrigatório quando initialBalance > 0: a transação OPENING e o lançamento de crédito. */
   opening?: { transactionId: string; entryId: string };
 }
 
@@ -36,10 +33,6 @@ export class InsufficientFundsError extends InvariantViolationError {
   }
 }
 
-/**
- * Aggregate root. Toda mudança de saldo produz exatamente um lançamento,
- * e a versão incrementa somente quando o saldo muda.
- */
 export class Wallet {
   private readonly _uncommittedEntries: WalletLedgerEntry[] = [];
 
@@ -78,14 +71,12 @@ export class Wallet {
         walletVersion: 1,
         createdAt: props.at,
       });
-      // A abertura conta como a versão 1, não como uma mudança posterior.
       wallet._balance = props.initialBalance;
       wallet._uncommittedEntries.push(entry);
     }
     return wallet;
   }
 
-  /** Reconstrução a partir da persistência — não revalida transições. */
   static rehydrate(state: WalletState): Wallet {
     return new Wallet(
       state.id,
@@ -131,7 +122,6 @@ export class Wallet {
     return direction === LedgerDirection.Debit ? this.debit(money, movement) : this.credit(money, movement);
   }
 
-  /** Lançamentos produzidos desde a carga, para o repositório persistir junto com o saldo. */
   pullUncommittedEntries(): WalletLedgerEntry[] {
     return this._uncommittedEntries.splice(0, this._uncommittedEntries.length);
   }

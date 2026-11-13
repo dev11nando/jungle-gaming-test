@@ -2,7 +2,6 @@ import type { MikroORM } from '@mikro-orm/postgresql';
 import { Client, Pool, type PoolClient } from 'pg';
 import { initOrm } from '../../src/infrastructure/database/mikro-orm.config';
 
-/** Banco dedicado aos testes, para não sujar o banco de desenvolvimento. */
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://wagering:wagering@localhost:5432/wagering_test';
 
@@ -19,14 +18,12 @@ export async function ensureTestDatabase(url = TEST_DATABASE_URL): Promise<void>
       await client.query(`create database "${dbName.replace(/"/g, '')}"`);
     }
   } catch (error) {
-    // Corrida entre arquivos de teste criando o mesmo banco.
     if ((error as { code?: string }).code !== '42P04' && (error as { code?: string }).code !== '23505') throw error;
   } finally {
     await client.end();
   }
 }
 
-/** Recria o schema do zero rodando down até 0 e up de novo (prova de reversibilidade). */
 export async function resetSchema(url = TEST_DATABASE_URL): Promise<MikroORM> {
   await ensureTestDatabase(url);
   const orm = await initOrm(url, { pool: { min: 0, max: 20 } });
@@ -62,7 +59,6 @@ export async function inTransaction<T>(pool: Pool, work: (client: PoolClient) =>
   }
 }
 
-/** SQLSTATE de um erro do pg, para asserts: 23505 unique, 23514 check, 23503 fk, P0001 raise. */
 export async function sqlState(work: Promise<unknown>): Promise<string | undefined> {
   try {
     await work;

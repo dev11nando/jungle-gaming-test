@@ -34,11 +34,9 @@ import {
   walletToRecord,
 } from './mappers';
 
-/** Espera máxima por um lock de linha antes de devolver erro transitório (503) em vez de pendurar a requisição. */
 const LOCK_TIMEOUT = '5s';
 const STATEMENT_TIMEOUT = '15s';
 
-/** SQLSTATE tratados como transitórios: conexão, serialização/deadlock, lock/statement timeout, shutdown. */
 const TRANSIENT_SQLSTATE = /^(08|40001|40P01|55P03|57014|57P0[1-3]|53)/;
 const TRANSIENT_NODE_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN']);
 

@@ -15,11 +15,6 @@ export interface ErrorBody {
   correlationId?: string;
 }
 
-/**
- * Mapa HTTP único para todos os endpoints (ver ARCHITECTURE.md § HTTP):
- * 400 contrato · 401/403 auth · 404 ausente · 409 conflito · 422 rejeição persistida (no controller)
- * · 202 pendente (no controller) · 503 transitório (pode reenviar) · 500 bug.
- */
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
   private readonly logger = new Logger('HttpError');

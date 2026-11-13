@@ -18,7 +18,6 @@ export function presentSubmission(tx: WagerTransaction, idempotentReplay: boolea
   } = {
     transactionId: tx.id,
     status: tx.status,
-    // Saldo observado no momento em que a transação terminou — replay devolve o original.
     balance: tx.resultBalance?.toJSON() ?? null,
     idempotentReplay,
   };
