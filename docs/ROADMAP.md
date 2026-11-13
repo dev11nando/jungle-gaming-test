@@ -1,8 +1,8 @@
 # Roadmap
 
-Cada fase só começa com a anterior estável. A fase 1 é esta entrega. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
+Cada fase só começa com a anterior estável. Fases 1, 2 e 3 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
 
-## Fase 1 — Esqueleto (esta entrega)
+## Fase 1 — Esqueleto ✅
 
 Pronto quando:
 
@@ -12,7 +12,7 @@ Pronto quando:
 
 Fora desta fase: agregados, migrations, use cases de aposta, consumidor, outbox e testes de integração.
 
-## Fase 2 — Domínio
+## Fase 2 — Domínio ✅ (`bun run test`)
 
 `Money`, `Wallet`, `WagerTransaction`, `WalletLedgerEntry`, `InboxMessage`, `OutboxMessage` e os eventos de integração. Construtor privado, factories `create` / `from` / `rehydrate`. Reidratação não revalida transição.
 
@@ -23,7 +23,7 @@ Testes unitários, sem banco:
 - BET, WIN, LOSS, REFUND e ROLLBACK;
 - mesma idempotency key com payload diferente é conflito.
 
-## Fase 3 — Schema
+## Fase 3 — Schema ✅ (`bun run test:integration`)
 
 Migrations MikroORM com `up` e `down`. As invariantes da seção de schema em [ARCHITECTURE.md](../ARCHITECTURE.md) existem como constraint, índice único ou trigger — não só no código.
 

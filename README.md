@@ -1,6 +1,6 @@
 # Jungle Gaming — processador de apostas
 
-Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Esta etapa deixa o contrato fechado e um esqueleto que sobe: NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. As regras de saldo, ledger e fila ainda não estão implementadas — o desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem de construção em [docs/ROADMAP.md](docs/ROADMAP.md).
+Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. O domínio financeiro (Money, Wallet, WagerTransaction, ledger, inbox, outbox e eventos) e o schema com as invariantes no banco estão implementados e testados. Casos de uso HTTP, consumidor SQS e publisher da outbox são as próximas fases — o desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## O que responde hoje
 
@@ -30,6 +30,12 @@ O Keycloak leva cerca de um minuto na primeira subida. Espere os três serviços
 
 ```bash
 docker compose ps
+```
+
+Migrations no banco de desenvolvimento:
+
+```bash
+bun run db:migrate
 ```
 
 A API no host:
@@ -82,6 +88,11 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 | `bun run start` | sobe a API |
 | `bun run start:dev` | sobe a API e recarrega ao salvar |
 | `bun run typecheck` | `tsc --noEmit` em modo estrito |
+| `bun run test` | testes unitários do domínio (sem infra) |
+| `bun run test:integration` | testes contra PostgreSQL real (banco `wagering_test`, criado automaticamente; requer `stack:up`) |
+| `bun run db:migrate` | aplica migrations pendentes |
+| `bun run db:migrate:down` | reverte a última migration |
+| `bun run db:migrate:status` | migrations executadas e pendentes |
 | `bun run stack:up` | Postgres, LocalStack e Keycloak |
 | `bun run stack:app` | o mesmo, mais a API no Compose |
 | `bun run stack:down` | derruba a stack |
@@ -91,7 +102,12 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 ```text
 src/health/          liveness e readiness
 src/iam/             guard OIDC, @Public(), ProviderIdentityPort
-src/modules/         domínio, aplicação, persistência e mensageria (ainda vazios)
+src/shared/domain/             DomainError e envelope IntegrationEvent
+src/modules/wagering/domain/   Money, Wallet, WagerTransaction, ledger, processWager, eventos
+src/modules/messaging/domain/  InboxMessage, OutboxMessage
+src/infrastructure/database/   MikroORM (EntitySchema), migrations, CLI de migração
+test/unit/           domínio puro
+test/integration/    PostgreSQL real
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 
