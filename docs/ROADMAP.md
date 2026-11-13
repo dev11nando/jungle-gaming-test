@@ -1,6 +1,6 @@
 # Roadmap
 
-Cada fase só começa com a anterior estável. Fases 1 a 6 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
+Cada fase só começa com a anterior estável. Fases 1 a 7 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
 
 ## Fase 1 — Esqueleto ✅
 
@@ -49,18 +49,22 @@ Cobertas em `test/integration/sqs-consumer.test.ts` e `outbox-and-pending.test.t
 
 Publisher com `FOR UPDATE SKIP LOCKED`, seguro com dois publishers. Referência ausente fica `PENDING_REFERENCE` e o worker aplica o backoff documentado (8 tentativas ou 15 minutos). Esgotou: `REJECTED`, `REFERENCE_NOT_FOUND` e evento.
 
-## Fase 7 — Corrida e falha
+## Fase 7 — Corrida e falha ✅ (`bun run test:cluster`)
 
 Postgres e LocalStack reais. Paralelismo de verdade, não mock sequencial.
 
-- a mesma aposta 50 vezes em paralelo produz um único débito;
-- saldo 100.00, duas apostas simultâneas de 80.00: uma `PROCESSED`, uma `REJECTED` por `INSUFFICIENT_FUNDS`, saldo 20.00, um lançamento de débito, retry não duplica o débito;
-- wallets distintas em paralelo;
-- três ou mais instâncias;
-- processo morto depois do commit e antes do ack;
-- dois publishers na mesma outbox;
-- REFUND ou ROLLBACK entregue antes da referência;
-- reinício do serviço com a consistência final comprovada.
+| Cenário obrigatório | Onde |
+| --- | --- |
+| a mesma aposta 50× em paralelo → um débito | `test/integration/wagering.test.ts` e `test/cluster/multi-instance.test.ts` (50× distribuídas em 3 processos) |
+| 100.00 e duas apostas simultâneas de 80.00 | `wagering.test.ts` (caso de uso) e `test/e2e/http.test.ts` (HTTP) |
+| wallets distintas em paralelo, sem lock global | `wagering.test.ts` |
+| três ou mais instâncias | `multi-instance.test.ts`: 3 processos `bun src/main.ts` com HTTP + todos os workers |
+| processo morto depois do commit e antes do ack | `sqs-consumer.test.ts` (in-process) e `multi-instance.test.ts` (SIGKILL de um nó no meio do tráfego) |
+| dois publishers na mesma outbox | `outbox-and-pending.test.ts` e os 3 publishers do cluster |
+| REFUND/ROLLBACK antes da referência | `outbox-and-pending.test.ts` e o cluster (20 REFUNDs antes das BETs via SQS) |
+| reinício do serviço com consistência final | `multi-instance.test.ts`: derruba tudo, sobe um nó, reconcilia todas as wallets via HTTP e confere que todo evento da outbox foi publicado |
+
+Todo arquivo que mexe em saldo termina com `assertAllWalletsReconcile`: `wallet.balance` igual ao saldo reconstruído pelo ledger, para todas as wallets do banco.
 
 ## Fase 8 — Observabilidade
 

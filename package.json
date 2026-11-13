@@ -17,7 +17,8 @@
     "db:migrate:down": "bun src/infrastructure/database/migrate.ts down",
     "db:migrate:status": "bun src/infrastructure/database/migrate.ts status",
     "test:e2e": "bun test test/e2e --timeout 60000",
-    "test:all": "bun test test --timeout 60000"
+    "test:all": "bun test test --timeout 180000",
+    "test:cluster": "bun test test/cluster --timeout 180000"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.940.0",
