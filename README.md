@@ -1,8 +1,8 @@
 # Jungle Gaming — processador de apostas
 
-Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. Domínio financeiro, schema com as invariantes no banco, API HTTP, consumidor SQS (inbox, retry, DLQ), publisher da outbox e worker de referência pendente estão implementados e testados contra PostgreSQL e LocalStack reais. O desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
+Serviço financeiro distribuído que processa transações de aposta de vários provedores, por HTTP e SQS, com correção sob duplicação, reordenação, falhas e múltiplas instâncias. NestJS no Bun, PostgreSQL (MikroORM), SQS no LocalStack e Keycloak. Decisões e trade-offs em [ARCHITECTURE.md](ARCHITECTURE.md); fases e mapa dos cenários obrigatórios em [docs/ROADMAP.md](docs/ROADMAP.md); carga em [docs/load-test.md](docs/load-test.md).
 
-## O que responde hoje
+## Endpoints
 
 | Método | Caminho | Auth |
 | --- | --- | --- |
@@ -114,7 +114,8 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 | `bun run test:integration` | constraints, casos de uso, concorrência, consumidor SQS, outbox e pendências contra PostgreSQL e LocalStack reais (banco `wagering_test` e filas por teste criados automaticamente; requer `stack:up`) |
 | `bun run test:e2e` | API HTTP completa (guard real com chave JWT local) contra PostgreSQL real |
 | `bun run test:cluster` | 3 processos reais da aplicação (HTTP + workers) contra PostgreSQL e LocalStack, com SIGKILL e reinício |
-| `bun run test:all` | tudo acima |
+| `bun run test:all` | todos os testes acima |
+| `bun run test:load` | teste de carga com 3 instâncias; gera `docs/load-test-results.md` ([metodologia e análise](docs/load-test.md)) |
 | `bun run db:migrate` | aplica migrations pendentes |
 | `bun run db:migrate:down` | reverte a última migration |
 | `bun run db:migrate:status` | migrations executadas e pendentes |

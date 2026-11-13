@@ -32,6 +32,7 @@ const WORKER_ID = Symbol('WORKER_ID');
           dlqName: c.sqs.dlqName,
           visibilityTimeoutSeconds: c.sqs.visibilityTimeoutSeconds,
           waitTimeSeconds: c.sqs.waitTimeSeconds,
+          pollers: c.sqs.pollers,
         }),
     },
     {
