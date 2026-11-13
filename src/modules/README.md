@@ -1,6 +1,6 @@
 # Módulos
 
-Pastas reservadas para as próximas fases. Ainda não há regra de negócio aqui.
+Domínio implementado em `wagering/domain` e `messaging/domain`. Persistência compartilhada em `src/infrastructure/database`.
 
 | Pasta | Vai receber |
 | --- | --- |

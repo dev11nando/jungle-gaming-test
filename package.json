@@ -9,10 +9,19 @@
     "typecheck": "tsc --noEmit",
     "stack:up": "docker compose up -d postgres localstack keycloak",
     "stack:down": "docker compose down",
-    "stack:app": "docker compose --profile app up -d --build"
+    "stack:app": "docker compose --profile app up -d --build",
+    "test": "bun test test/unit",
+    "test:unit": "bun test test/unit",
+    "test:integration": "bun test test/integration --timeout 60000",
+    "db:migrate": "bun src/infrastructure/database/migrate.ts up",
+    "db:migrate:down": "bun src/infrastructure/database/migrate.ts down",
+    "db:migrate:status": "bun src/infrastructure/database/migrate.ts status"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.940.0",
+    "@mikro-orm/core": "6.6.18",
+    "@mikro-orm/migrations": "6.6.18",
+    "@mikro-orm/postgresql": "6.6.18",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
@@ -22,6 +31,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
     "@types/node": "^24.6.0",
     "@types/pg": "^8.15.5",
     "typescript": "^5.9.2"
