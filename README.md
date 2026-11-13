@@ -113,7 +113,8 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 | `bun run test` | testes unitários do domínio (sem infra) |
 | `bun run test:integration` | constraints, casos de uso, concorrência, consumidor SQS, outbox e pendências contra PostgreSQL e LocalStack reais (banco `wagering_test` e filas por teste criados automaticamente; requer `stack:up`) |
 | `bun run test:e2e` | API HTTP completa (guard real com chave JWT local) contra PostgreSQL real |
-| `bun run test:all` | unitários + integração + e2e |
+| `bun run test:cluster` | 3 processos reais da aplicação (HTTP + workers) contra PostgreSQL e LocalStack, com SIGKILL e reinício |
+| `bun run test:all` | tudo acima |
 | `bun run db:migrate` | aplica migrations pendentes |
 | `bun run db:migrate:down` | reverte a última migration |
 | `bun run db:migrate:status` | migrations executadas e pendentes |
@@ -137,6 +138,7 @@ src/infrastructure/database/   MikroORM (EntitySchema), migrations, CLI de migra
 test/unit/           domínio puro
 test/integration/    PostgreSQL real (schema, casos de uso, concorrência)
 test/e2e/            HTTP de ponta a ponta
+test/cluster/        várias instâncias em processos separados
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 
