@@ -1,16 +1,38 @@
 # Jungle Gaming — processador de apostas
 
-Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. O domínio financeiro (Money, Wallet, WagerTransaction, ledger, inbox, outbox e eventos) e o schema com as invariantes no banco estão implementados e testados. Casos de uso HTTP, consumidor SQS e publisher da outbox são as próximas fases — o desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
+Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. Domínio financeiro, schema com as invariantes no banco e a API HTTP completa estão implementados e testados (idempotência, concorrência e atomicidade em PostgreSQL real). Consumidor SQS, publisher da outbox e worker de referência pendente são as próximas fases — o desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## O que responde hoje
 
 | Método | Caminho | Auth |
 | --- | --- | --- |
 | `GET` | `/health/live` | aberta |
-| `GET` | `/health/ready` | aberta — Postgres, SQS e Keycloak |
+| `GET` | `/health/ready` | aberta — exige Postgres e SQS (Keycloak informativo) |
+| `GET` | `/metrics` | aberta — formato Prometheus |
+| `POST` | `/wallets` | Bearer JWT |
+| `GET` | `/wallets/:walletId` | Bearer JWT |
+| `GET` | `/wallets/:walletId/ledger?cursor=&limit=50` | Bearer JWT |
+| `POST` | `/wallets/:walletId/reconciliation` | Bearer JWT |
+| `POST` | `/wagering/transactions` (header `Idempotency-Key`) | Bearer JWT, `provider_id` = `providerId` do corpo |
+| `GET` | `/wagering/transactions/:transactionId` | Bearer JWT (só do próprio provedor) |
+| `GET` | `/providers/:providerId/wagering/transactions/:externalTransactionId` | Bearer JWT do mesmo provedor |
 | `GET` | `/whoami` | Bearer JWT do realm `jungle` |
 
-`/whoami` existe para provar o token. Devolve o `providerId` do claim, o client (`azp`) e o `sub`.
+Mapa de status (igual em todos os endpoints): 400 contrato · 401/403 auth · 404 ausente · 409 conflito · 422 rejeição de negócio persistida · 200 processada/replay · 202 pendente · 503 transitório (reenviar com a mesma key). Detalhes em [ARCHITECTURE.md § HTTP](ARCHITECTURE.md#http).
+
+### Exemplo
+
+```bash
+TOKEN=$(curl -s -X POST "http://localhost:8080/realms/jungle/protocol/openid-connect/token" \
+  -d grant_type=client_credentials -d client_id=provider-a -d client_secret=provider-a-secret | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).access_token)')
+
+curl -s -X POST localhost:3000/wallets -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"playerId":"0192f28f-5dc0-7d58-bdb2-814ad6a0f4a1","initialBalance":{"amount":"1000.00","currency":"BRL"}}'
+
+curl -s -X POST localhost:3000/wagering/transactions -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:transaction-123' \
+  -d '{"providerId":"provider-a","externalTransactionId":"transaction-123","playerId":"0192f28f-5dc0-7d58-bdb2-814ad6a0f4a1","walletId":"<id>","roundId":"round-987","gameId":"fortune-chimp","kind":"BET","money":{"amount":"25.00","currency":"BRL"}}'
+```
 
 ## Pré-requisitos
 
@@ -89,7 +111,9 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 | `bun run start:dev` | sobe a API e recarrega ao salvar |
 | `bun run typecheck` | `tsc --noEmit` em modo estrito |
 | `bun run test` | testes unitários do domínio (sem infra) |
-| `bun run test:integration` | testes contra PostgreSQL real (banco `wagering_test`, criado automaticamente; requer `stack:up`) |
+| `bun run test:integration` | casos de uso, constraints e concorrência contra PostgreSQL real (banco `wagering_test`, criado automaticamente; requer `stack:up`) |
+| `bun run test:e2e` | API HTTP completa (guard real com chave JWT local) contra PostgreSQL real |
+| `bun run test:all` | unitários + integração + e2e |
 | `bun run db:migrate` | aplica migrations pendentes |
 | `bun run db:migrate:down` | reverte a última migration |
 | `bun run db:migrate:status` | migrations executadas e pendentes |
@@ -105,9 +129,14 @@ src/iam/             guard OIDC, @Public(), ProviderIdentityPort
 src/shared/domain/             DomainError e envelope IntegrationEvent
 src/modules/wagering/domain/   Money, Wallet, WagerTransaction, ledger, processWager, eventos
 src/modules/messaging/domain/  InboxMessage, OutboxMessage
+src/modules/wagering/application/     casos de uso, portas (UnitOfWork, repositórios), comando validado
+src/modules/wagering/infrastructure/  repositórios MikroORM, tradução de erros do banco
+src/modules/wagering/http/            controllers, mapa de status, correlation id
+src/modules/observability/            logger JSON e métricas Prometheus
 src/infrastructure/database/   MikroORM (EntitySchema), migrations, CLI de migração
 test/unit/           domínio puro
-test/integration/    PostgreSQL real
+test/integration/    PostgreSQL real (schema, casos de uso, concorrência)
+test/e2e/            HTTP de ponta a ponta
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 

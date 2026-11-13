@@ -1,6 +1,6 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { ProviderIdentity, ProviderIdentityPort, RequestWithIdentity } from './provider-identity';
+import { ProviderIdentityPort, type ProviderIdentity, type RequestWithIdentity } from './provider-identity';
 
 @Injectable({ scope: Scope.REQUEST })
 export class RequestProviderIdentity extends ProviderIdentityPort {

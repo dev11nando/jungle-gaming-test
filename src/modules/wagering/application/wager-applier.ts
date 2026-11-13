@@ -1,0 +1,69 @@
+import type { EventContext } from '../../../shared/domain/integration-event';
+import { OutboxMessage } from '../../messaging/domain/outbox-message';
+import {
+  WagerTransactionPendingReference,
+  WagerTransactionProcessed,
+  WagerTransactionRejected,
+  WalletBalanceChanged,
+} from '../domain/events/wagering-events';
+import { processWager, type ProcessWagerOutcome } from '../domain/wager-processor';
+import type { WagerTransaction } from '../domain/wager-transaction';
+import type { Wallet } from '../domain/wallet';
+import type { Repositories } from './ports';
+
+/**
+ * Aplica uma transação sobre uma wallet JÁ TRAVADA, dentro da transação SQL do chamador,
+ * e grava tudo o que a decisão produz: transação, saldo, ledger e eventos na outbox.
+ * Compartilhado por submissão (HTTP/SQS) e pelo worker de PENDING_REFERENCE.
+ */
+export async function applyToLockedWallet(params: {
+  repos: Repositories;
+  transaction: WagerTransaction;
+  wallet: Wallet;
+  isNew: boolean;
+  newId: () => string;
+  events: EventContext;
+}): Promise<ProcessWagerOutcome> {
+  const { repos, transaction: tx, wallet, events } = params;
+
+  const reference =
+    tx.referenceExternalTransactionId === undefined
+      ? undefined
+      : await repos.transactions.findByProviderExternalId(tx.providerId, tx.referenceExternalTransactionId);
+  const referenceAlreadyReversed =
+    reference !== undefined && tx.isReversal() ? await repos.transactions.hasProcessedReversal(reference.id) : false;
+
+  const versionBefore = wallet.version;
+  const outcome = processWager({
+    transaction: tx,
+    wallet,
+    reference,
+    referenceAlreadyReversed,
+    newLedgerEntryId: params.newId,
+    now: events.occurredAt,
+  });
+
+  // Ordem explícita: transação (alvo das FKs) → saldo → ledger → outbox.
+  if (params.isNew) {
+    await repos.transactions.insert(tx);
+  } else {
+    await repos.transactions.update(tx);
+  }
+
+  const messages: OutboxMessage[] = [];
+  if (outcome.type === 'PROCESSED') {
+    if (outcome.ledgerEntry !== undefined) {
+      await repos.wallets.updateBalance(wallet, versionBefore);
+      await repos.ledger.append(wallet.pullUncommittedEntries());
+      messages.push(OutboxMessage.enqueue(WalletBalanceChanged.from(wallet, outcome.ledgerEntry, events)));
+    }
+    messages.push(OutboxMessage.enqueue(WagerTransactionProcessed.from(tx, events)));
+  } else if (outcome.type === 'REJECTED') {
+    messages.push(OutboxMessage.enqueue(WagerTransactionRejected.from(tx, events)));
+  } else if (params.isNew) {
+    // O evento de pendência sai uma vez, na entrada; novas tentativas sem sucesso não geram ruído.
+    messages.push(OutboxMessage.enqueue(WagerTransactionPendingReference.from(tx, events)));
+  }
+  await repos.outbox.enqueue(messages);
+  return outcome;
+}

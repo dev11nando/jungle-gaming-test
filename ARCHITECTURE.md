@@ -2,7 +2,7 @@
 
 Processador de apostas com uma regra de ouro: o PostgreSQL confirma saldo, ledger, inbox e outbox na mesma transação, ou não confirma nada. SQS entrega at-least-once e pode reordenar. Várias instâncias podem tocar a mesma wallet. A correção não depende de cache em memória nem de fila FIFO.
 
-Estado atual (ver [docs/ROADMAP.md](docs/ROADMAP.md)): borda (Compose, health, Keycloak), domínio financeiro completo com testes unitários e schema PostgreSQL com as invariantes provadas em banco real. Casos de uso HTTP, consumidor SQS e publisher da outbox ainda não existem.
+Estado atual (ver [docs/ROADMAP.md](docs/ROADMAP.md)): borda (Compose, health, Keycloak), domínio financeiro, schema com as invariantes no banco e API HTTP completa (wallets, transações, ledger, reconciliação) com idempotência e concorrência testadas em PostgreSQL real. Consumidor SQS, publisher da outbox e worker de referência pendente ainda não existem (eventos já são gravados na outbox, no mesmo commit).
 
 ## Fluxo
 
@@ -127,7 +127,23 @@ O header `Idempotency-Key` é a fonte da verdade. O default recomendado ao clien
 2. Chaves ordenadas em todo objeto. Sem espaços. Campo ausente fica de fora; não se grava `null` no lugar.
 3. Header, `messageId` e o restante do transporte ficam de fora.
 
+O `amount` entra no hash já normalizado para escala 2: `"25"` e `"25.00"` são a mesma operação. `walletId` entra em minúsculas.
+
 Inbox única em `(consumer_name, message_id)`. Deduplicação e FIFO do SQS encurtam reentrega; não substituem essas restrições.
+
+### Fluxo de `SubmitWagerTransaction` (HTTP e fila)
+
+1. **Validação de contrato** (`parseSubmitWagerCommand`) e cálculo do hash. Erro aqui → 400, nada persistido.
+2. **Caminho rápido, sem lock**: busca pela idempotency key. Achou → mesmo hash é replay (resultado gravado, inclusive saldo observado); hash diferente é `IDEMPOTENCY_KEY_REUSED` (409).
+3. **Transação SQL** (`lock_timeout` 5s, `statement_timeout` 15s):
+   1. `SELECT … FOR UPDATE` na wallet (`LockMode.PESSIMISTIC_WRITE`). Ausente → 404.
+   2. Releitura da key **sob o lock**: quem esperou o lock enxerga o commit de quem chegou antes (READ COMMITTED relê a cada statement). Duplicata → replay.
+   3. `(providerId, externalTransactionId)` já existente com outra key → `EXTERNAL_TRANSACTION_ID_REUSED` (409).
+   4. Resolve a referência, verifica reversão prévia, roda `processWager`.
+   5. Grava transação → `UPDATE wallets … WHERE version = ?` → ledger → outbox (→ inbox, se veio da fila). Commit.
+4. **Corrida de unicidade**: se outra instância inseriu a mesma key/inbox entre os passos 2 e 3.5 (possível quando a mesma key aponta para wallets diferentes), o `UNIQUE` aborta esta transação inteira; o caso de uso volta ao passo 2 (até 2 vezes) e responde como replay ou conflito.
+
+Uma operação toca uma única wallet, então há um único lock por transação: sem ordem de aquisição a respeitar e sem deadlock possível entre operações de aposta.
 
 ## Concorrência
 
@@ -197,21 +213,26 @@ Conflito de idempotência (mesma chave, outro hash) não é failure code de tran
 
 O mesmo mapa vale para todos os endpoints. O provedor não precisa ler a mensagem para saber se pode reenviar.
 
-| Situação | Status |
-| --- | --- |
-| payload inválido | 400 |
-| token ausente ou inválido | 401 |
-| token válido, provedor não confere ou claim ausente | 403 |
-| recurso ausente | 404 |
-| wallet já existente, ou mesma idempotency key com outro hash | 409 |
-| rejeição de negócio persistida | 422, corpo com `failureCode` e `status: REJECTED` |
-| `PROCESSED`, inclusive replay | 200, `idempotentReplay` true ou false |
-| aceite ainda não aplicado (`PENDING`, `PENDING_REFERENCE`) | 202 |
-| Postgres, SQS ou Keycloak indisponíveis na hora de servir | 503 |
+| Situação | Status | `error.code` / corpo | Pode reenviar igual? |
+| --- | --- | --- | --- |
+| payload inválido, header ausente | 400 | `INVALID_MONEY`, `INVALID_FIELD`, `INVALID_KIND`, `REFERENCE_REQUIRED`, `OPENING_NOT_SUBMITTABLE`, `IDEMPOTENCY_KEY_REQUIRED`, `INVALID_CURSOR`… | não, corrigir |
+| token ausente ou inválido | 401 | `UNAUTHORIZED` | com token válido |
+| claim `provider_id` ausente ou provedor ≠ corpo | 403 | `FORBIDDEN`, `PROVIDER_MISMATCH` | não |
+| recurso ausente | 404 | `WALLET_NOT_FOUND`, `TRANSACTION_NOT_FOUND` | não |
+| conflito | 409 | `WALLET_ALREADY_EXISTS`, `IDEMPOTENCY_KEY_REUSED`, `EXTERNAL_TRANSACTION_ID_REUSED` | não |
+| rejeição de negócio persistida | 422 | `status: REJECTED` + `failureCode` | não (replay repete o 422) |
+| `PROCESSED`, inclusive replay | 200 | `idempotentReplay` true/false | sim, é replay |
+| aceite ainda não aplicado | 202 | `status: PENDING_REFERENCE` | sim, é replay |
+| banco indisponível, timeout de lock, deadlock | 503 + `Retry-After: 1` | `TRANSIENT_INFRASTRUCTURE_ERROR` | **sim**, mesma key |
+| bug | 500 | `INTERNAL_ERROR` | — |
+
+Erros têm sempre o corpo `{ "error": { "code", "message" }, "correlationId" }`. Respostas de transação: `{ transactionId, status, balance, idempotentReplay, failureCode? }`, onde `balance` é o saldo observado quando a transação terminou (`null` enquanto pendente).
 
 Replay de uma rejeição repete o 422 original, com `idempotentReplay: true`.
 
-Ledger: `GET /wallets/:walletId/ledger?cursor=&limit=50`. O cursor é opaco (posição estável por `createdAt` + `id`), não um offset.
+Visibilidade entre provedores: `GET /wagering/transactions/:id` de outro provedor responde 404 (não vaza existência); `GET /providers/:providerId/...` com outro provedor responde 403.
+
+Ledger: `GET /wallets/:walletId/ledger?cursor=&limit=50` (máx. 200). O cursor é opaco (`base64url("v1:<position>")`, onde `position` é uma coluna identity do ledger): estável sob inserts concorrentes, não é offset.
 
 Reconciliação compara o saldo materializado com a soma do ledger. Divergência é log, métrica e `consistent: false`. O endpoint não reescreve saldo.
 
@@ -241,19 +262,15 @@ Health fica de fora do guard (`@Public()`). A fila não passa pelo guard.
 
 `ProviderIdentityPort` é a porta de leitura da identidade do request. Hoje a implementação pede o que o guard gravou. Quando a fila precisar de identidade assinada, entra outro adapter atrás da mesma porta, sem o caso de uso conhecer JWT.
 
+A origem das chaves é um provider injetável (`JWT_KEY_RESOLVER`, JWKS remoto por padrão). Os testes e2e trocam só esse provider por uma chave RSA local e assinam tokens com o mesmo `iss`/`aud`/`provider_id`: o guard real roda, sem precisar do Keycloak no ar.
+
 Segredos do realm (`provider-a-secret`, admin/admin) são de desenvolvimento. Não são modelo de produção.
 
 ## Observabilidade
 
-Fase 8. O contrato já está fechado para o código não nascer sem ele:
-
-- log JSON com `correlationId`, `messageId`, `transactionId`, `walletId`, `providerId`;
-- sem corpo financeiro completo e sem segredo;
-- métricas de status, duplicata, retry, DLQ, conflito de lock, lag da outbox e latência de processamento;
-- `/health/live` só diz que o processo responde;
-- `/health/ready` falha se Postgres, SQS ou Keycloak não respondem.
-
-Nesta fase o log ainda é o logger do Nest. O ready check já consulta as três dependências.
+- **Logs**: `JsonLogger` (uma linha JSON por evento, `service` e `instanceId` fixos). Campos de contexto passam por uma lista permitida (`correlationId`, `messageId`, `transactionId`, `walletId`, `providerId`, `status`, `failureCode`…); qualquer outro campo é descartado, o que impede logar payload financeiro completo ou token por descuido. `X-Correlation-Id` é aceito na entrada (ou gerado) e devolvido na resposta.
+- **Métricas**: `GET /metrics` (público, formato Prometheus, por instância). Já emitidas: `wagering_transactions_total{status,kind,replay}`, `wagering_duplicates_total`, `wagering_idempotency_conflicts_total`, `wagering_lock_conflicts_total{reason}`, `wagering_retries_total{reason}`, `wagering_processing_seconds` (histograma), `wagering_reconciliation_divergences_total`. DLQ e lag da outbox entram com as fases 5–6.
+- **Health**: `/health/live` só diz que o processo responde. `/health/ready` exige PostgreSQL e SQS; Keycloak aparece no relatório, mas não derruba o readiness — o JWKS já carregado continua validando tokens, e a fila não depende do IdP.
 
 ## Trade-offs
 
@@ -266,7 +283,7 @@ Nesta fase o log ainda é o logger do Nest. O ready check já consulta as três 
 
 ## Limitações conhecidas
 
-- Ainda não há casos de uso HTTP, consumidor nem publisher (fases 4–6).
+- Ainda não há consumidor SQS, publisher da outbox nem worker de PENDING_REFERENCE (fases 5–6): os eventos ficam gravados e pendentes na outbox.
 - A fila não prova a identidade do produtor.
 - Sem reversão parcial e sem ledger de partidas dobradas.
 - Moeda operacional única (BRL), com o tipo preparado para recusar outra moeda.
