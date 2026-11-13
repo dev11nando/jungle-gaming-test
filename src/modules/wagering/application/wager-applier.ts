@@ -7,7 +7,7 @@ import {
   WalletBalanceChanged,
 } from '../domain/events/wagering-events';
 import { processWager, type ProcessWagerOutcome } from '../domain/wager-processor';
-import type { WagerTransaction } from '../domain/wager-transaction';
+import type { ReferenceRetryPolicy, WagerTransaction } from '../domain/wager-transaction';
 import type { Wallet } from '../domain/wallet';
 import type { Repositories } from './ports';
 
@@ -18,6 +18,7 @@ export async function applyToLockedWallet(params: {
   isNew: boolean;
   newId: () => string;
   events: EventContext;
+  retryPolicy?: ReferenceRetryPolicy;
 }): Promise<ProcessWagerOutcome> {
   const { repos, transaction: tx, wallet, events } = params;
 
@@ -36,6 +37,7 @@ export async function applyToLockedWallet(params: {
     referenceAlreadyReversed,
     newLedgerEntryId: params.newId,
     now: events.occurredAt,
+    retryPolicy: params.retryPolicy,
   });
 
   // Ordem explícita: transação (alvo das FKs) → saldo → ledger → outbox.
@@ -59,5 +61,10 @@ export async function applyToLockedWallet(params: {
     messages.push(OutboxMessage.enqueue(WagerTransactionPendingReference.from(tx, events)));
   }
   await repos.outbox.enqueue(messages);
+
+  // Pendências que esperavam por esta transação são reavaliadas já, sem esperar o backoff.
+  if (tx.isTerminal()) {
+    await repos.transactions.wakePendingDependents(tx.providerId, tx.externalTransactionId, events.occurredAt);
+  }
   return outcome;
 }

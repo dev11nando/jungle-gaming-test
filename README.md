@@ -1,6 +1,6 @@
 # Jungle Gaming — processador de apostas
 
-Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. Domínio financeiro, schema com as invariantes no banco e a API HTTP completa estão implementados e testados (idempotência, concorrência e atomicidade em PostgreSQL real). Consumidor SQS, publisher da outbox e worker de referência pendente são as próximas fases — o desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
+Serviço financeiro distribuído que processa transações de aposta vindas de vários provedores. Hoje sobem NestJS no Bun, PostgreSQL, SQS no LocalStack e Keycloak protegendo a API HTTP. Domínio financeiro, schema com as invariantes no banco, API HTTP, consumidor SQS (inbox, retry, DLQ), publisher da outbox e worker de referência pendente estão implementados e testados contra PostgreSQL e LocalStack reais. O desenho está em [ARCHITECTURE.md](ARCHITECTURE.md) e a ordem em [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## O que responde hoje
 
@@ -111,7 +111,7 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 | `bun run start:dev` | sobe a API e recarrega ao salvar |
 | `bun run typecheck` | `tsc --noEmit` em modo estrito |
 | `bun run test` | testes unitários do domínio (sem infra) |
-| `bun run test:integration` | casos de uso, constraints e concorrência contra PostgreSQL real (banco `wagering_test`, criado automaticamente; requer `stack:up`) |
+| `bun run test:integration` | constraints, casos de uso, concorrência, consumidor SQS, outbox e pendências contra PostgreSQL e LocalStack reais (banco `wagering_test` e filas por teste criados automaticamente; requer `stack:up`) |
 | `bun run test:e2e` | API HTTP completa (guard real com chave JWT local) contra PostgreSQL real |
 | `bun run test:all` | unitários + integração + e2e |
 | `bun run db:migrate` | aplica migrations pendentes |
@@ -140,4 +140,37 @@ test/e2e/            HTTP de ponta a ponta
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 
-Filas criadas no LocalStack: `wager-transactions.fifo` e `wager-transactions-dlq.fifo`. A deduplicação do FIFO é otimização. A garantia fica no banco, como descrito na arquitetura.
+Filas criadas no LocalStack: `wager-transactions.fifo` (entrada), `wager-transactions-dlq.fifo` e `wager-events.fifo` (eventos da outbox).
+
+## Workers
+
+O mesmo processo sobe a API e os workers. Para separar papéis:
+
+| Variável | Default | Efeito |
+| --- | --- | --- |
+| `WORKERS` | `consumer,outbox,pending-reference` | quais workers sobem (`none` para nenhum) |
+| `HTTP_ENABLED` | `true` | `false` sobe só os workers |
+| `SQS_MAX_RECEIVE_COUNT` | `5` | tentativas antes da DLQ |
+| `SQS_VISIBILITY_TIMEOUT_SECONDS` | `30` | visibilidade da mensagem em processamento |
+| `INSTANCE_ID` | `host:pid` | id da instância nos logs e no lease da outbox |
+
+Mensagem de exemplo na fila (`MessageGroupId` = walletId):
+
+```json
+{
+  "messageId": "msg-123",
+  "type": "WagerTransactionRequested",
+  "occurredAt": "2026-07-29T15:00:00.000Z",
+  "data": {
+    "providerId": "provider-a",
+    "externalTransactionId": "transaction-123",
+    "idempotencyKey": "provider-a:transaction-123",
+    "playerId": "<playerId>",
+    "walletId": "<walletId>",
+    "roundId": "round-987",
+    "gameId": "fortune-chimp",
+    "kind": "BET",
+    "money": { "amount": "25.00", "currency": "BRL" }
+  }
+}
+``` A deduplicação do FIFO é otimização. A garantia fica no banco, como descrito na arquitetura.

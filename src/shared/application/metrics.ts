@@ -19,6 +19,7 @@ export const METRIC = {
   outboxPublished: 'wagering_outbox_published_total',
   outboxFailures: 'wagering_outbox_failures_total',
   outboxLag: 'wagering_outbox_lag_seconds',
+  outboxPublishDelay: 'wagering_outbox_publish_delay_seconds',
   outboxPending: 'wagering_outbox_pending',
   pendingReferenceResolved: 'wagering_pending_reference_total',
 } as const;

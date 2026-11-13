@@ -2,7 +2,7 @@
 
 Processador de apostas com uma regra de ouro: o PostgreSQL confirma saldo, ledger, inbox e outbox na mesma transação, ou não confirma nada. SQS entrega at-least-once e pode reordenar. Várias instâncias podem tocar a mesma wallet. A correção não depende de cache em memória nem de fila FIFO.
 
-Estado atual (ver [docs/ROADMAP.md](docs/ROADMAP.md)): borda (Compose, health, Keycloak), domínio financeiro, schema com as invariantes no banco e API HTTP completa (wallets, transações, ledger, reconciliação) com idempotência e concorrência testadas em PostgreSQL real. Consumidor SQS, publisher da outbox e worker de referência pendente ainda não existem (eventos já são gravados na outbox, no mesmo commit).
+Estado atual (ver [docs/ROADMAP.md](docs/ROADMAP.md)): domínio, schema, API HTTP, consumidor SQS com inbox/DLQ, publisher da outbox com lease e worker de referência pendente, testados contra PostgreSQL e LocalStack reais.
 
 ## Fluxo
 
@@ -182,6 +182,10 @@ Se a referência não existe, a transação persiste como `PENDING_REFERENCE` e 
 
 Limite: 8 tentativas ou 15 minutos desde `createdAt`, o que ocorrer primeiro. O teto cabe numa rodada de jogo que ainda pode chegar atrasada, e não deixa linha pendente a noite inteira. Esgotou o limite: `REJECTED`, `REFERENCE_NOT_FOUND`, evento `WagerTransactionRejected`.
 
+O worker (`ProcessPendingReferences`, a cada 250ms quando ocioso) busca pendências vencidas e processa cada uma numa transação própria: trava a wallet, depois a linha da transação, revalida o status e reaplica todas as regras (`processWager`). É a mesma ordem de lock da submissão, então dois workers sobre a mesma pendência serializam e só um aplica.
+
+Quando qualquer transação termina, as pendências que apontam para ela têm `next_reference_attempt_at` antecipado para agora, na mesma transação SQL. A referência atrasada destrava a pendência no próximo ciclo do worker, sem esperar o backoff.
+
 ## Failure codes
 
 Estáveis, em `SCREAMING_SNAKE`, para o provedor decidir se reenvia, corrige o payload ou desiste.
@@ -238,11 +242,39 @@ Reconciliação compara o saldo materializado com a soma do ledger. Divergência
 
 ## Mensageria
 
-Filas: `wager-transactions.fifo` e `wager-transactions-dlq.fifo`. `ContentBasedDeduplication` e o redrive (`maxReceiveCount` 5) estão no init do LocalStack como rede de segurança operacional. A inbox e a idempotency key continuam sendo a garantia.
+Filas: `wager-transactions.fifo` (entrada), `wager-transactions-dlq.fifo` e `wager-events.fifo` (eventos publicados pela outbox). `ContentBasedDeduplication` e o redrive (`maxReceiveCount` 5) estão no init do LocalStack como rede de segurança. A inbox e a idempotency key continuam sendo a garantia.
 
-Erro de negócio: terminal, ack. Erro transitório (banco ou broker fora): a mensagem volta com backoff, sem ack. Erro permanente, ou o receive count estourou: DLQ. Em SIGTERM o consumidor termina o lote em andamento ou devolve a visibilidade; não fica segurando mensagem no processo que está morrendo.
+Cada processo escolhe seus papéis por `WORKERS` (`consumer`, `outbox`, `pending-reference` ou `none`) e `HTTP_ENABLED`. Todos compartilham um pool PostgreSQL e um cliente SQS.
 
-Publishers concorrentes pegam linhas com `FOR UPDATE SKIP LOCKED`, publicam e marcam `published_at`. Se a publicação acontece e o processo morre antes de marcar, outra instância publica de novo. O consumidor deduplica por `eventId`. Perder o evento confirmado no banco não é um modo aceitável; duplicar a publicação é.
+### Consumidor
+
+Long polling de até 10 mensagens. Grupos FIFO distintos em paralelo; dentro do grupo, em ordem.
+
+| Situação | Ação |
+| --- | --- |
+| JSON/envelope inválido, `type` desconhecido | DLQ (`INVALID_JSON`, `INVALID_ENVELOPE`, `UNSUPPORTED_MESSAGE_TYPE`) |
+| `(consumer, messageId)` já na inbox, mesmo hash | ack (duplicata de transporte) |
+| `messageId` já na inbox com outro hash | DLQ `MESSAGE_ID_CONFLICT` |
+| payload inválido, wallet inexistente, conflito de idempotência | DLQ com o `code` do erro |
+| processada, rejeitada por regra, pendente de referência, replay | ack, depois do commit |
+| erro transitório (banco, lock, deadlock) ou inesperado | sem ack; visibilidade 2^n s (teto 60s) |
+| transitório com `receiveCount ≥ SQS_MAX_RECEIVE_COUNT` (5) | DLQ `MAX_ATTEMPTS_EXCEEDED` |
+
+A inbox é gravada na mesma transação que a transação financeira, o ledger e a outbox. O ack (`DeleteMessage`) só acontece depois do commit; se o processo morre entre os dois, a redelivery encontra a inbox (ou a idempotency key, se a mesma operação vier em outro `messageId`) e só dá ack. O próprio consumidor move para a DLQ os erros permanentes, com o atributo `reason`; o redrive do SQS cobre o caso de o consumidor nem conseguir classificar a mensagem.
+
+SIGTERM: `enableShutdownHooks` dispara `beforeApplicationShutdown` antes de o pool fechar. O consumidor para o long polling, termina as mensagens em processamento (até 20s) e devolve com visibilidade 0 as que ainda não começaram.
+
+Não persistimos `FAILED` para mensagem esgotada: se o motivo é banco fora, nem daria para gravar. A DLQ com o motivo é o registro auditável, e reprocessar da DLQ é seguro pela idempotência.
+
+### Publisher da outbox (lease)
+
+1. Transação curta: `UPDATE … SET locked_by, locked_until = now() + 30s` sobre `SELECT … FOR UPDATE SKIP LOCKED` das linhas vencidas e sem lease válido, por `position`. Commit.
+2. `SendMessageBatch` fora de qualquer transação SQL, com `MessageGroupId = aggregateId` e `MessageDeduplicationId = eventId`.
+3. Sucesso: `published_at = now()` só onde `locked_by` ainda é este worker. Falha: `attempts + 1`, `next_attempt_at` com backoff (1s·2^n, teto 5min), `last_error`, lease liberado.
+
+Se o processo morre depois de publicar e antes de marcar, o lease expira e outra instância publica de novo: duplicação é possível, perda não. Quem consome os eventos deduplica por `eventId` (o FIFO também, dentro de 5 minutos). A outbox não desiste de um evento.
+
+A ordem entre eventos do mesmo agregado não é garantida entre publishers diferentes; o consumidor usa `walletVersion` (em `WalletBalanceChanged`) para ordenar.
 
 ## Persistência
 
@@ -269,7 +301,7 @@ Segredos do realm (`provider-a-secret`, admin/admin) são de desenvolvimento. N�
 ## Observabilidade
 
 - **Logs**: `JsonLogger` (uma linha JSON por evento, `service` e `instanceId` fixos). Campos de contexto passam por uma lista permitida (`correlationId`, `messageId`, `transactionId`, `walletId`, `providerId`, `status`, `failureCode`…); qualquer outro campo é descartado, o que impede logar payload financeiro completo ou token por descuido. `X-Correlation-Id` é aceito na entrada (ou gerado) e devolvido na resposta.
-- **Métricas**: `GET /metrics` (público, formato Prometheus, por instância). Já emitidas: `wagering_transactions_total{status,kind,replay}`, `wagering_duplicates_total`, `wagering_idempotency_conflicts_total`, `wagering_lock_conflicts_total{reason}`, `wagering_retries_total{reason}`, `wagering_processing_seconds` (histograma), `wagering_reconciliation_divergences_total`. DLQ e lag da outbox entram com as fases 5–6.
+- **Métricas**: `GET /metrics` (público, formato Prometheus, por instância). Já emitidas: `wagering_transactions_total{status,kind,replay}`, `wagering_duplicates_total`, `wagering_idempotency_conflicts_total`, `wagering_lock_conflicts_total{reason}`, `wagering_retries_total{reason}`, `wagering_processing_seconds` (histograma), `wagering_reconciliation_divergences_total`. Mensageria: `wagering_sqs_messages_total{action,reason}`, `wagering_dlq_messages_total{reason}`, `wagering_outbox_published_total`, `wagering_outbox_failures_total`, `wagering_outbox_pending`, `wagering_outbox_lag_seconds` (idade do evento pendente mais antigo), `wagering_outbox_publish_delay_seconds` (histograma commit → publicação) e `wagering_pending_reference_total{outcome}`.
 - **Health**: `/health/live` só diz que o processo responde. `/health/ready` exige PostgreSQL e SQS; Keycloak aparece no relatório, mas não derruba o readiness — o JWKS já carregado continua validando tokens, e a fila não depende do IdP.
 
 ## Trade-offs
@@ -283,7 +315,8 @@ Segredos do realm (`provider-a-secret`, admin/admin) são de desenvolvimento. N�
 
 ## Limitações conhecidas
 
-- Ainda não há consumidor SQS, publisher da outbox nem worker de PENDING_REFERENCE (fases 5–6): os eventos ficam gravados e pendentes na outbox.
+- Ordem de publicação por agregado não é garantida entre publishers concorrentes (ver Mensageria).
+- Métricas são por processo e em memória; agregar entre instâncias depende de um scraper.
 - A fila não prova a identidade do produtor.
 - Sem reversão parcial e sem ledger de partidas dobradas.
 - Moeda operacional única (BRL), com o tipo preparado para recusar outra moeda.

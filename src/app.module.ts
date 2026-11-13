@@ -3,10 +3,11 @@ import { AppConfigModule } from './config/app-config.module';
 import { HealthModule } from './health/health.module';
 import { IamModule } from './iam/iam.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import { ObservabilityModule } from './modules/observability/observability.module';
 import { WageringModule } from './modules/wagering/wagering.module';
 
 @Module({
-  imports: [AppConfigModule, ObservabilityModule, DatabaseModule, IamModule, HealthModule, WageringModule],
+  imports: [AppConfigModule, ObservabilityModule, DatabaseModule, IamModule, HealthModule, WageringModule, MessagingModule],
 })
 export class AppModule {}

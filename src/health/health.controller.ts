@@ -1,4 +1,5 @@
-import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Inject, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { Public } from '../iam/public.decorator';
 import { HealthService, type ReadyReport } from './health.service';
 
@@ -13,11 +14,9 @@ export class HealthController {
   }
 
   @Get('ready')
-  async ready(): Promise<ReadyReport> {
+  async ready(@Res({ passthrough: true }) res: Response): Promise<ReadyReport> {
     const report = await this.health.ready();
-    if (report.status !== 'ok') {
-      throw new ServiceUnavailableException(report);
-    }
+    res.status(report.status === 'ok' ? 200 : 503);
     return report;
   }
 }

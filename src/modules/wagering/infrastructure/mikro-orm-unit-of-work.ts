@@ -192,26 +192,25 @@ class MikroOrmWagerTransactionRepository implements WagerTransactionRepository {
     return count > 0;
   }
 
-  async claimDuePendingReferences(now: Date, limit: number): Promise<string[]> {
+  async findDuePendingReferences(now: Date, limit: number): Promise<string[]> {
     const rows = await this.em.execute<{ id: string }[]>(
       `select id from wager_transactions
         where status = 'PENDING_REFERENCE' and next_reference_attempt_at <= ?
         order by next_reference_attempt_at
-        limit ?
-        for update skip locked`,
+        limit ?`,
       [now, limit],
     );
     return rows.map((row) => row.id);
   }
 
-  async findPendingDependents(providerId: string, referenceExternalTransactionId: string): Promise<string[]> {
-    const rows = await this.em.execute<{ id: string }[]>(
-      `select id from wager_transactions
+  async wakePendingDependents(providerId: string, referenceExternalTransactionId: string, now: Date): Promise<void> {
+    await this.em.execute(
+      `update wager_transactions set next_reference_attempt_at = ?
         where provider_id = ? and reference_external_transaction_id = ? and status = 'PENDING_REFERENCE'
-        order by created_at`,
-      [providerId, referenceExternalTransactionId],
+          and next_reference_attempt_at > ?`,
+      [now, providerId, referenceExternalTransactionId, now],
+      'run',
     );
-    return rows.map((row) => row.id);
   }
 
   private async one(where: Partial<WagerTransactionRecord>): Promise<WagerTransaction | undefined> {
