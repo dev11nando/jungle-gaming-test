@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, UnauthorizedException } from '@nestjs/common';
-import { ProviderIdentity, ProviderIdentityPort } from './provider-identity';
+import { ProviderIdentityPort, type ProviderIdentity } from './provider-identity';
 
 @Controller()
 export class WhoAmIController {

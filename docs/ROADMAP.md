@@ -1,6 +1,6 @@
 # Roadmap
 
-Cada fase só começa com a anterior estável. Fases 1, 2 e 3 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
+Cada fase só começa com a anterior estável. Fases 1 a 4 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
 
 ## Fase 1 — Esqueleto ✅
 
@@ -29,7 +29,9 @@ Migrations MikroORM com `up` e `down`. As invariantes da seção de schema em [A
 
 Teste de integração sobe Postgres real e prova que saldo negativo, ledger alterado, wallet duplicada e segunda reversão processada são rejeitados pelo banco.
 
-## Fase 4 — HTTP de wallet e aposta
+## Fase 4 — HTTP de wallet e aposta ✅ (`bun run test:integration`, `bun run test:e2e`)
+
+Já cobre também, adiantado da fase 7: 2×80 simultâneas, a mesma aposta 50× em paralelo, wallets distintas em paralelo, prova de ausência de lock global e atomicidade com falha injetada na outbox. Logs JSON e `/metrics` adiantados da fase 8.
 
 - `POST /wallets` com OPENING na mesma transação SQL quando o saldo inicial é maior que zero.
 - `GET` de wallet, ledger com cursor opaco e transação (por id interno e por id do provedor).

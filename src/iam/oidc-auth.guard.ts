@@ -7,21 +7,19 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { jwtVerify, type JWTPayload } from 'jose';
+import { JWT_KEY_RESOLVER, type JwtKeyResolver } from './jwt-key-resolver';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { IS_PUBLIC_KEY } from './public.decorator';
-import { ProviderIdentity, RequestWithIdentity } from './provider-identity';
+import type { ProviderIdentity, RequestWithIdentity } from './provider-identity';
 
 @Injectable()
 export class OidcAuthGuard implements CanActivate {
-  private readonly jwks: JWTVerifyGetKey;
-
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-  ) {
-    this.jwks = createRemoteJWKSet(new URL(config.keycloak.jwksUri));
-  }
+    @Inject(JWT_KEY_RESOLVER) private readonly jwks: JwtKeyResolver,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [

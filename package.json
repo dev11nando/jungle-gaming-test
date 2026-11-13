@@ -15,7 +15,9 @@
     "test:integration": "bun test test/integration --timeout 60000",
     "db:migrate": "bun src/infrastructure/database/migrate.ts up",
     "db:migrate:down": "bun src/infrastructure/database/migrate.ts down",
-    "db:migrate:status": "bun src/infrastructure/database/migrate.ts status"
+    "db:migrate:status": "bun src/infrastructure/database/migrate.ts status",
+    "test:e2e": "bun test test/e2e --timeout 60000",
+    "test:all": "bun test test --timeout 60000"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.940.0",
@@ -31,7 +33,9 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@nestjs/testing": "^11.1.6",
     "@types/bun": "^1.4.4",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.6.0",
     "@types/pg": "^8.15.5",
     "typescript": "^5.9.2"
