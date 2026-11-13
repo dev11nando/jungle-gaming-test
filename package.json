@@ -1,0 +1,29 @@
+{
+  "name": "jungle-gaming-wagering",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Processador distribuído de apostas — Jungle Gaming",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "start:dev": "bun --watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "stack:up": "docker compose up -d postgres localstack keycloak",
+    "stack:down": "docker compose down",
+    "stack:app": "docker compose --profile app up -d --build"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.940.0",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "jose": "^6.1.0",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/pg": "^8.15.5",
+    "typescript": "^5.9.2"
+  }
+}
