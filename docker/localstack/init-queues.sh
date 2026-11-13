@@ -3,7 +3,7 @@ set -eu
 
 awslocal sqs create-queue \
   --queue-name wager-transactions-dlq.fifo \
-  --attributes FifoQueue=true,ContentBasedDeduplication=true
+  --attributes '{"FifoQueue":"true","ContentBasedDeduplication":"true"}'
 
 DLQ_URL=$(awslocal sqs get-queue-url --queue-name wager-transactions-dlq.fifo --query QueueUrl --output text)
 DLQ_ARN=$(awslocal sqs get-queue-attributes \
@@ -14,4 +14,8 @@ DLQ_ARN=$(awslocal sqs get-queue-attributes \
 
 awslocal sqs create-queue \
   --queue-name wager-transactions.fifo \
-  --attributes "FifoQueue=true,ContentBasedDeduplication=true,RedrivePolicy={\"deadLetterTargetArn\":\"${DLQ_ARN}\",\"maxReceiveCount\":\"5\"}"
+  --attributes "{\"FifoQueue\":\"true\",\"ContentBasedDeduplication\":\"true\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"
+
+awslocal sqs create-queue \
+  --queue-name wager-events.fifo \
+  --attributes '{"FifoQueue":"true","ContentBasedDeduplication":"false"}'

@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { generateKeyPair, SignJWT, type CryptoKey, type KeyObject } from 'jose';
 import { configureApp } from '../../src/app.factory';
+import { JsonLogger } from '../../src/modules/observability/json-logger';
 import { AppModule } from '../../src/app.module';
 import { JWT_KEY_RESOLVER } from '../../src/iam/jwt-key-resolver';
 import { TEST_DATABASE_URL } from './database';
@@ -20,6 +21,7 @@ export interface TestHttpApp {
 
 export async function startHttpApp(overrides: { provide: unknown; useValue: unknown }[] = []): Promise<TestHttpApp> {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
+  process.env.WORKERS ??= 'none';
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(JWT_KEY_RESOLVER)
@@ -28,7 +30,7 @@ export async function startHttpApp(overrides: { provide: unknown; useValue: unkn
     builder = builder.overrideProvider(o.provide as symbol).useValue(o.useValue);
   }
   const moduleRef = await builder.compile();
-  const app = configureApp(moduleRef.createNestApplication({ bodyParser: false }));
+  const app = configureApp(moduleRef.createNestApplication({ bodyParser: false, logger: new JsonLogger('silent') }));
   await app.listen(0);
   const address = app.getHttpServer().address() as { port: number };
   return {

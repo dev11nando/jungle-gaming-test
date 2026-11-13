@@ -72,6 +72,8 @@ services:
       SQS_ENDPOINT: http://localstack:4566
       SQS_REGION: us-east-1
       SQS_QUEUE_NAME: wager-transactions.fifo
+      SQS_DLQ_NAME: wager-transactions-dlq.fifo
+      SQS_EVENTS_QUEUE_NAME: wager-events.fifo
       KEYCLOAK_ISSUER: http://localhost:8080/realms/jungle
       KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/jungle/protocol/openid-connect/certs
       KEYCLOAK_AUDIENCE: wagering-api

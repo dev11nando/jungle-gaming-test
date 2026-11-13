@@ -20,8 +20,8 @@ export interface WagerTransactionRepository {
   findByIdempotencyKey(key: string): Promise<WagerTransaction | undefined>;
   findByProviderExternalId(providerId: string, externalTransactionId: string): Promise<WagerTransaction | undefined>;
   hasProcessedReversal(referenceTransactionId: string): Promise<boolean>;
-  claimDuePendingReferences(now: Date, limit: number): Promise<string[]>;
-  findPendingDependents(providerId: string, referenceExternalTransactionId: string): Promise<string[]>;
+  findDuePendingReferences(now: Date, limit: number): Promise<string[]>;
+  wakePendingDependents(providerId: string, referenceExternalTransactionId: string, now: Date): Promise<void>;
 }
 
 export interface LedgerPageItem {

@@ -4,7 +4,14 @@ export interface SqsConfig {
   endpoint: string;
   region: string;
   queueName: string;
+  dlqName: string;
+  eventsQueueName: string;
+  maxReceiveCount: number;
+  visibilityTimeoutSeconds: number;
+  waitTimeSeconds: number;
 }
+
+export type WorkerName = 'consumer' | 'outbox' | 'pending-reference';
 
 export interface KeycloakConfig {
   issuer: string;
@@ -18,6 +25,8 @@ export interface AppConfig {
   databaseUrl: string;
   sqs: SqsConfig;
   keycloak: KeycloakConfig;
+  workers: ReadonlySet<WorkerName>;
+  httpEnabled: boolean;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -31,6 +40,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       endpoint: required(env, 'SQS_ENDPOINT'),
       region: required(env, 'SQS_REGION'),
       queueName: required(env, 'SQS_QUEUE_NAME'),
+      dlqName: optional(env, 'SQS_DLQ_NAME', 'wager-transactions-dlq.fifo'),
+      eventsQueueName: optional(env, 'SQS_EVENTS_QUEUE_NAME', 'wager-events.fifo'),
+      maxReceiveCount: parseIntIn(optional(env, 'SQS_MAX_RECEIVE_COUNT', '5'), 1, 1000, 'SQS_MAX_RECEIVE_COUNT'),
+      visibilityTimeoutSeconds: parseIntIn(optional(env, 'SQS_VISIBILITY_TIMEOUT_SECONDS', '30'), 1, 43200, 'SQS_VISIBILITY_TIMEOUT_SECONDS'),
+      waitTimeSeconds: parseIntIn(optional(env, 'SQS_WAIT_TIME_SECONDS', '10'), 0, 20, 'SQS_WAIT_TIME_SECONDS'),
     },
     keycloak: {
       issuer: required(env, 'KEYCLOAK_ISSUER'),
@@ -38,6 +52,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       audience: required(env, 'KEYCLOAK_AUDIENCE'),
       healthUrl: required(env, 'KEYCLOAK_HEALTH_URL'),
     },
+    workers: parseWorkers(optional(env, 'WORKERS', 'consumer,outbox,pending-reference')),
+    httpEnabled: optional(env, 'HTTP_ENABLED', 'true') !== 'false',
   };
 }
 
@@ -47,6 +63,28 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
     throw new Error(`Missing environment variable ${name}`);
   }
   return value.trim();
+}
+
+function optional(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
+  const value = env[name];
+  return value === undefined || value.trim() === '' ? fallback : value.trim();
+}
+
+function parseIntIn(value: string, min: number, max: number, name: string): number {
+  if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
+    throw new Error(`Invalid ${name}: ${value}`);
+  }
+  return Number(value);
+}
+
+function parseWorkers(value: string): ReadonlySet<WorkerName> {
+  if (value === 'none') return new Set();
+  const allowed: WorkerName[] = ['consumer', 'outbox', 'pending-reference'];
+  const names = value.split(',').map((n) => n.trim()).filter(Boolean);
+  for (const n of names) {
+    if (!allowed.includes(n as WorkerName)) throw new Error(`Invalid WORKERS entry: ${n}`);
+  }
+  return new Set(names as WorkerName[]);
 }
 
 function parsePort(value: string): number {

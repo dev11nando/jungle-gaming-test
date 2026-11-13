@@ -1,6 +1,6 @@
 # Roadmap
 
-Cada fase só começa com a anterior estável. Fases 1 a 4 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
+Cada fase só começa com a anterior estável. Fases 1 a 6 concluídas. O invariante final de qualquer teste que mexa em saldo é `wallet.balance == saldo reconstruído pelo ledger`.
 
 ## Fase 1 — Esqueleto ✅
 
@@ -39,11 +39,13 @@ Já cobre também, adiantado da fase 7: 2×80 simultâneas, a mesma aposta 50× 
 - `POST /wallets/:walletId/reconciliation` sem correção silenciosa.
 - Mapa HTTP da arquitetura, igual em todos os endpoints.
 
-## Fase 5 — SQS
+## Fase 5 — SQS ✅
 
 Consumidor de `wager-transactions.fifo` reutiliza o use case da fase 4. Inbox por `(consumerName, messageId)`. Ack só depois do commit. Erro de negócio dá ack; transitório devolve a mensagem com backoff; permanente vai para a DLQ depois do limite. SIGTERM termina o que está em voo ou devolve a visibilidade.
 
-## Fase 6 — Outbox e referência pendente
+## Fase 6 — Outbox e referência pendente ✅
+
+Cobertas em `test/integration/sqs-consumer.test.ts` e `outbox-and-pending.test.ts`, inclusive crash entre commit e ack, SIGTERM, dois publishers, crash entre publicação e marcação e três consumidores concorrentes.
 
 Publisher com `FOR UPDATE SKIP LOCKED`, seguro com dois publishers. Referência ausente fica `PENDING_REFERENCE` e o worker aplica o backoff documentado (8 tentativas ou 15 minutos). Esgotou: `REJECTED`, `REFERENCE_NOT_FOUND` e evento.
 
