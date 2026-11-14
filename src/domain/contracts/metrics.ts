@@ -25,9 +25,3 @@ export const METRIC = {
   outboxPending: 'wagering_outbox_pending',
   pendingReferenceResolved: 'wagering_pending_reference_total',
 } as const;
-
-export class NoopMetrics implements Metrics {
-  increment(): void {}
-  observe(): void {}
-  setGauge(): void {}
-}
