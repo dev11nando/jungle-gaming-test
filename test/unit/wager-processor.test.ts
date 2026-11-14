@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { processWager, type ProcessWagerOutcome } from '../../src/modules/wagering/domain/wager-processor';
-import { WagerTransaction } from '../../src/modules/wagering/domain/wager-transaction';
+import { processWager, type ProcessWagerOutcome } from '../../src/domain/services/wager-processor';
+import { WagerTransaction } from '../../src/domain/entities/wager-transaction';
 import {
   FailureCode,
   LedgerDirection,
   WagerTransactionKind as K,
   WagerTransactionStatus as S,
-} from '../../src/modules/wagering/domain/wagering-types';
-import type { Wallet } from '../../src/modules/wagering/domain/wallet';
+} from '../../src/domain/entities/wagering-types';
+import type { Wallet } from '../../src/domain/entities/wallet';
 import { openWallet, T0, wager } from '../support/domain-fixtures';
 
 function run(

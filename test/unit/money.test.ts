@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Money } from '../../src/modules/wagering/domain/money';
+import { Money } from '../../src/domain/entities/money';
 
 const brl = (amount: string) => Money.from({ amount, currency: 'BRL' });
 

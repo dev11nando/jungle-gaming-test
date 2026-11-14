@@ -8,7 +8,7 @@ import {
   type SQSClient,
 } from '@aws-sdk/client-sqs';
 import { randomUUID } from 'node:crypto';
-import { createSqsClient } from '../../src/modules/messaging/infrastructure/sqs';
+import { createSqsClient } from '../../src/infra/messaging/sqs';
 
 export const SQS_ENDPOINT = process.env.TEST_SQS_ENDPOINT ?? 'http://localhost:4566';
 

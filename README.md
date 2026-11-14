@@ -125,21 +125,28 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 
 ## Layout
 
+Clean Architecture simplificada: o domínio no centro, sem dependência de framework; os adapters implementam os contratos do domínio; o `main/` monta tudo. Detalhes em [ARCHITECTURE.md § Camadas](ARCHITECTURE.md#camadas).
+
 ```text
-src/health/          liveness e readiness
-src/iam/             guard OIDC, @Public(), ProviderIdentityPort
-src/shared/domain/             DomainError e envelope IntegrationEvent
-src/modules/wagering/domain/   Money, Wallet, WagerTransaction, ledger, processWager, eventos
-src/modules/messaging/domain/  InboxMessage, OutboxMessage
-src/modules/wagering/application/     casos de uso, portas (UnitOfWork, repositórios), comando validado
-src/modules/wagering/infrastructure/  repositórios MikroORM, tradução de erros do banco
-src/modules/wagering/http/            controllers, mapa de status, correlation id
-src/modules/observability/            logger JSON e métricas Prometheus
-src/infrastructure/database/   MikroORM (EntitySchema), migrations, CLI de migração
-test/unit/           domínio puro
-test/integration/    PostgreSQL real (schema, casos de uso, concorrência)
-test/e2e/            HTTP de ponta a ponta
-test/cluster/        várias instâncias em processos separados
+src/
+  domain/
+    entities/        Money, Wallet, WagerTransaction, WalletLedgerEntry, InboxMessage, OutboxMessage
+    events/          IntegrationEvent e os 4 eventos
+    services/        processWager (regras de BET/WIN/LOSS/REFUND/ROLLBACK), payload hash
+    errors/          erros de domínio e de aplicação
+    contracts/       interfaces + tokens: repositórios, UnitOfWork, Clock, IdGenerator, Metrics, Logger, ProviderIdentityPort
+    usecases/        OpenWallet, SubmitWagerTransaction, WalletQueries, ReconcileWallet, ProcessPendingReferences, HandleWagerMessage
+  infra/             adapters que implementam os contratos
+    database/        MikroORM (EntitySchema), repositórios, migrations, CLI de migração
+    messaging/       consumidor SQS, publisher da outbox, loop de workers
+    auth/            guard OIDC (Keycloak), @Public()
+    observability/   logger JSON, métricas Prometheus
+    config/ health/ system/
+  presentation/http/ controllers, filtro de erros, presenters, correlation id
+  main/              módulos Nest (composition root) e app factory
+  main.ts            entrypoint
+test/
+  unit/ integration/ e2e/ cluster/ load/
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 

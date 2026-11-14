@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { Money } from '../../src/modules/wagering/domain/money';
-import { LedgerDirection } from '../../src/modules/wagering/domain/wagering-types';
-import { Wallet } from '../../src/modules/wagering/domain/wallet';
-import { WalletLedgerEntry } from '../../src/modules/wagering/domain/wallet-ledger-entry';
+import { Money } from '../../src/domain/entities/money';
+import { LedgerDirection } from '../../src/domain/entities/wagering-types';
+import { Wallet } from '../../src/domain/entities/wallet';
+import { WalletLedgerEntry } from '../../src/domain/entities/wallet-ledger-entry';
 import { brl, openWallet, T0 } from '../support/domain-fixtures';
 
 const move = () => ({ transactionId: randomUUID(), entryId: randomUUID(), at: T0 });

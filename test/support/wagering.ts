@@ -1,14 +1,19 @@
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { expect } from 'bun:test';
 import type { Pool } from 'pg';
-import { SystemClock, UuidV7Generator } from '../../src/infrastructure/system/system';
-import { PrometheusMetrics } from '../../src/modules/observability/prometheus-metrics';
-import { UnitOfWork, type Repositories } from '../../src/modules/wagering/application/ports';
-import { SubmitWagerTransaction } from '../../src/modules/wagering/application/submit-wager-transaction';
-import { parseSubmitWagerCommand, type SubmitWagerCommand } from '../../src/modules/wagering/application/wager-command';
-import { OpenWallet, ReconcileWallet, WalletQueries } from '../../src/modules/wagering/application/wallet-use-cases';
-import { Money } from '../../src/modules/wagering/domain/money';
-import { MikroOrmUnitOfWork } from '../../src/modules/wagering/infrastructure/mikro-orm-unit-of-work';
+import { SystemClock, UuidV7Generator } from '../../src/infra/system/system';
+import { PrometheusMetrics } from '../../src/infra/observability/prometheus-metrics';
+import type { Repositories, UnitOfWork } from '../../src/domain/contracts';
+import { nestLogger } from '../../src/infra/observability/nest-logger';
+import { SubmitWagerTransaction } from '../../src/domain/usecases/submit-wager-transaction';
+import { parseSubmitWagerCommand, type SubmitWagerCommand } from '../../src/domain/usecases/wager-command';
+import { OpenWallet } from '../../src/domain/usecases/open-wallet';
+import { ReconcileWallet } from '../../src/domain/usecases/reconcile-wallet';
+import { WalletQueries } from '../../src/domain/usecases/wallet-queries';
+import { Money } from '../../src/domain/entities/money';
+import { MikroOrmUnitOfWork } from '../../src/infra/database/mikro-orm-unit-of-work';
+
+export const testLogger = nestLogger('test');
 
 export interface Services {
   uow: UnitOfWork;
@@ -27,19 +32,17 @@ export function buildServices(orm: MikroORM, uow: UnitOfWork = new MikroOrmUnitO
     uow,
     metrics,
     openWallet: new OpenWallet(uow, ids, clock),
-    submit: new SubmitWagerTransaction(uow, ids, clock, metrics),
+    submit: new SubmitWagerTransaction(uow, ids, clock, metrics, testLogger),
     queries: new WalletQueries(uow),
-    reconcile: new ReconcileWallet(uow, metrics),
+    reconcile: new ReconcileWallet(uow, metrics, testLogger),
   };
 }
 
-export class FailingUnitOfWork extends UnitOfWork {
+export class FailingUnitOfWork implements UnitOfWork {
   constructor(
     private readonly inner: UnitOfWork,
     private readonly sabotage: (repos: Repositories) => Repositories,
-  ) {
-    super();
-  }
+  ) {}
   transaction<T>(work: (repos: Repositories) => Promise<T>): Promise<T> {
     return this.inner.transaction((repos) => work(this.sabotage(repos)));
   }

@@ -1,10 +1,10 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { generateKeyPair, SignJWT, type CryptoKey, type KeyObject } from 'jose';
-import { configureApp } from '../../src/app.factory';
-import { JsonLogger } from '../../src/modules/observability/json-logger';
-import { AppModule } from '../../src/app.module';
-import { JWT_KEY_RESOLVER } from '../../src/iam/jwt-key-resolver';
+import { configureApp } from '../../src/main/app.factory';
+import { JsonLogger } from '../../src/infra/observability/json-logger';
+import { AppModule } from '../../src/main/app.module';
+import { JWT_KEY_RESOLVER } from '../../src/infra/auth/jwt-key-resolver';
 import { TEST_DATABASE_URL } from './database';
 
 export const ISSUER = 'http://localhost:8080/realms/jungle';

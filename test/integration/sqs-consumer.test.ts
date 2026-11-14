@@ -3,14 +3,14 @@ import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { WagerMessageHandler } from '../../src/modules/messaging/application/wager-message-handler';
-import { QueueUrls } from '../../src/modules/messaging/infrastructure/sqs';
-import { SqsWagerConsumer, type ConsumerOptions } from '../../src/modules/messaging/infrastructure/sqs-wager-consumer';
-import { TransientInfrastructureError } from '../../src/modules/wagering/application/errors';
-import type { UnitOfWork } from '../../src/modules/wagering/application/ports';
+import { HandleWagerMessage } from '../../src/domain/usecases/handle-wager-message';
+import { QueueUrls } from '../../src/infra/messaging/sqs';
+import { SqsWagerConsumer, type ConsumerOptions } from '../../src/infra/messaging/sqs-wager-consumer';
+import { TransientInfrastructureError } from '../../src/domain/errors/application-errors';
+import type { UnitOfWork } from '../../src/domain/contracts';
 import { resetSchema, testPool } from '../support/database';
 import { createTestQueues, drain, queueDepth, sendWagerMessage, testSqsClient, waitFor, type TestQueues } from '../support/sqs';
-import { assertAllWalletsReconcile, brl, buildServices, FailingUnitOfWork, ledgerSnapshot, wagerBody, type Services } from '../support/wagering';
+import { assertAllWalletsReconcile, brl, buildServices, FailingUnitOfWork, ledgerSnapshot, testLogger, wagerBody, type Services } from '../support/wagering';
 
 let orm: MikroORM;
 let pool: Pool;
@@ -38,7 +38,7 @@ function consumer(
   opts: { uow?: UnitOfWork; maxAttempts?: number; options?: Partial<ConsumerOptions> } = {},
 ): SqsWagerConsumer {
   const services = opts.uow ? buildServices(orm, opts.uow) : svc;
-  const handler = new WagerMessageHandler(services.uow, services.submit, services.metrics, opts.maxAttempts ?? 5);
+  const handler = new HandleWagerMessage(services.uow, services.submit, services.metrics, testLogger, opts.maxAttempts ?? 5);
   const c = new SqsWagerConsumer(sqs, new QueueUrls(sqs), handler, services.metrics, {
     queueName: queues.queueName,
     dlqName: queues.dlqName,

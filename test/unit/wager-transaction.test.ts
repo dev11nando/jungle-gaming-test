@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { InboxMessage } from '../../src/modules/messaging/domain/inbox-message';
-import { OutboxMessage } from '../../src/modules/messaging/domain/outbox-message';
-import { WalletBalanceChanged, WagerTransactionProcessed } from '../../src/modules/wagering/domain/events/wagering-events';
-import { canonicalJson, wagerPayloadHash } from '../../src/modules/wagering/domain/payload-hash';
-import { WagerTransaction } from '../../src/modules/wagering/domain/wager-transaction';
-import { FailureCode, WagerTransactionKind as K, WagerTransactionStatus as S } from '../../src/modules/wagering/domain/wagering-types';
+import { InboxMessage } from '../../src/domain/entities/inbox-message';
+import { OutboxMessage } from '../../src/domain/entities/outbox-message';
+import { WalletBalanceChanged, WagerTransactionProcessed } from '../../src/domain/events/wagering-events';
+import { canonicalJson, wagerPayloadHash } from '../../src/domain/services/payload-hash';
+import { WagerTransaction } from '../../src/domain/entities/wager-transaction';
+import { FailureCode, WagerTransactionKind as K, WagerTransactionStatus as S } from '../../src/domain/entities/wagering-types';
 import { brl, openWallet, T0, wager } from '../support/domain-fixtures';
 
 const payload = {
