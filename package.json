@@ -4,6 +4,9 @@
   "private": true,
   "description": "Processador distribuído de apostas — Jungle Gaming",
   "scripts": {
+    "setup": "bun setup/setup.ts",
+    "stop": "bun setup/stop.ts",
+    "down": "bun setup/down.ts",
     "start": "bun src/main.ts",
     "start:dev": "bun --watch src/main.ts",
     "typecheck": "tsc --noEmit",
