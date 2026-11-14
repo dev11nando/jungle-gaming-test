@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import { createApp } from './app.factory';
-import { loadAppConfig } from './config/app-config';
+import { createApp } from './main/app.factory';
+import { loadAppConfig } from './infra/config/app-config';
 
 async function bootstrap(): Promise<void> {
   const config = loadAppConfig();

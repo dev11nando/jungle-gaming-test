@@ -1,6 +1,6 @@
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { Client, Pool, type PoolClient } from 'pg';
-import { initOrm } from '../../src/infrastructure/database/mikro-orm.config';
+import { initOrm } from '../../src/infra/database/mikro-orm.config';
 
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://wagering:wagering@localhost:5432/wagering_test';

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { ConflictError, NotFoundError } from '../../src/modules/wagering/application/errors';
-import { FailureCode, WagerTransactionStatus as S } from '../../src/modules/wagering/domain/wagering-types';
+import { ConflictError, NotFoundError } from '../../src/domain/errors/application-errors';
+import { FailureCode, WagerTransactionStatus as S } from '../../src/domain/entities/wagering-types';
 import { resetSchema, testPool } from '../support/database';
 import {
   assertAllWalletsReconcile,

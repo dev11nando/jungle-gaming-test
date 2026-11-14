@@ -3,15 +3,15 @@ import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { OutboxPublisher, type PublisherOptions } from '../../src/modules/messaging/infrastructure/outbox-publisher';
-import { OutboxStore } from '../../src/modules/messaging/infrastructure/outbox-store';
-import { QueueUrls } from '../../src/modules/messaging/infrastructure/sqs';
-import { SystemClock, UuidV7Generator } from '../../src/infrastructure/system/system';
-import { ProcessPendingReferences } from '../../src/modules/wagering/application/process-pending-references';
-import { FailureCode, WagerTransactionStatus as S } from '../../src/modules/wagering/domain/wagering-types';
+import { OutboxPublisher, type PublisherOptions } from '../../src/infra/messaging/outbox-publisher';
+import { OutboxStore } from '../../src/infra/messaging/outbox-store';
+import { QueueUrls } from '../../src/infra/messaging/sqs';
+import { SystemClock, UuidV7Generator } from '../../src/infra/system/system';
+import { ProcessPendingReferences } from '../../src/domain/usecases/process-pending-references';
+import { FailureCode, WagerTransactionStatus as S } from '../../src/domain/entities/wagering-types';
 import { resetSchema, testPool } from '../support/database';
 import { createTestQueues, drain, testSqsClient, waitFor } from '../support/sqs';
-import { assertAllWalletsReconcile, brl, buildServices, command, ledgerSnapshot, wagerBody, type Services } from '../support/wagering';
+import { assertAllWalletsReconcile, brl, buildServices, command, ledgerSnapshot, testLogger, wagerBody, type Services } from '../support/wagering';
 
 let orm: MikroORM;
 let pool: Pool;
@@ -156,7 +156,7 @@ describe('referência fora de ordem', () => {
     await svc.submit.execute(command(betBody), ctx);
     expect(await ledgerSnapshot(pool, walletId)).toMatchObject({ balance: '70.00' });
 
-    const worker = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics);
+    const worker = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics, testLogger);
     await waitFor(async () => (await worker.runOnce()) > 0, 5_000);
     const after = await svc.queries.getTransaction(refund.transaction.id);
     expect(after.status).toBe(S.Processed);
@@ -172,7 +172,7 @@ describe('referência fora de ordem', () => {
     );
     const policy = { baseDelayMs: 1_000, maxDelayMs: 2_000, maxAttempts: 2, ttlMs: 60_000 };
     await pool.query(`update wager_transactions set next_reference_attempt_at = now() where id = $1`, [rb.transaction.id]);
-    const worker = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics, policy);
+    const worker = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics, testLogger, policy);
     await worker.processOne(rb.transaction.id);
     expect((await svc.queries.getTransaction(rb.transaction.id)).status).toBe(S.PendingReference);
     await pool.query(`update wager_transactions set next_reference_attempt_at = now() where id = $1`, [rb.transaction.id]);
@@ -202,8 +202,8 @@ describe('referência fora de ordem', () => {
       ctx,
     );
     await svc.submit.execute(command(betBody), ctx);
-    const a = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics);
-    const b = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics);
+    const a = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics, testLogger);
+    const b = new ProcessPendingReferences(svc.uow, ids, clock, svc.metrics, testLogger);
     await Promise.all([a.processOne(refund.transaction.id), b.processOne(refund.transaction.id)]);
     expect((await svc.queries.getTransaction(refund.transaction.id)).status).toBe(S.Processed);
     expect(await ledgerSnapshot(pool, walletId)).toMatchObject({ balance: '100.00', credits: 2, debits: 1 });

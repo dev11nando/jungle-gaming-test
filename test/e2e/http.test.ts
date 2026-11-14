@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
-import { TransientInfrastructureError } from '../../src/modules/wagering/application/errors';
-import { UnitOfWork } from '../../src/modules/wagering/application/ports';
+import { TransientInfrastructureError } from '../../src/domain/errors/application-errors';
+import { UNIT_OF_WORK, type UnitOfWork } from '../../src/domain/contracts';
 import { resetSchema } from '../support/database';
 import { startHttpApp, type TestHttpApp } from '../support/http-app';
 
@@ -266,7 +266,7 @@ describe('consultas de transação', () => {
 
 describe('503 em falha transitória', () => {
   test('banco indisponível → 503 com Retry-After, sem colapsar em 500', async () => {
-    class DownUnitOfWork extends UnitOfWork {
+    class DownUnitOfWork implements UnitOfWork {
       transaction<T>(): Promise<T> {
         return Promise.reject(new TransientInfrastructureError('down', 'connection'));
       }
@@ -274,7 +274,7 @@ describe('503 em falha transitória', () => {
         return Promise.reject(new TransientInfrastructureError('down', 'connection'));
       }
     }
-    const down = await startHttpApp([{ provide: UnitOfWork, useValue: new DownUnitOfWork() }]);
+    const down = await startHttpApp([{ provide: UNIT_OF_WORK, useValue: new DownUnitOfWork() }]);
     try {
       const token = await down.token();
       const res = await fetch(`${down.baseUrl}/wallets/${randomUUID()}`, { headers: { authorization: `Bearer ${token}` } });

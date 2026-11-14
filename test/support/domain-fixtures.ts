@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Money } from '../../src/modules/wagering/domain/money';
-import { wagerPayloadHash } from '../../src/modules/wagering/domain/payload-hash';
-import { WagerTransaction } from '../../src/modules/wagering/domain/wager-transaction';
-import { WagerTransactionKind } from '../../src/modules/wagering/domain/wagering-types';
-import { Wallet } from '../../src/modules/wagering/domain/wallet';
+import { Money } from '../../src/domain/entities/money';
+import { wagerPayloadHash } from '../../src/domain/services/payload-hash';
+import { WagerTransaction } from '../../src/domain/entities/wager-transaction';
+import { WagerTransactionKind } from '../../src/domain/entities/wagering-types';
+import { Wallet } from '../../src/domain/entities/wallet';
 
 export const T0 = new Date('2026-07-29T15:00:00.000Z');
 

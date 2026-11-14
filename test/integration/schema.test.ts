@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { LedgerEntryRecord, WalletRecord } from '../../src/infrastructure/database/records';
+import { LedgerEntryRecord, WalletRecord } from '../../src/infra/database/records';
 import { inTransaction, resetSchema, sqlState, testPool } from '../support/database';
 
 let orm: MikroORM;

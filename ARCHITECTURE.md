@@ -45,6 +45,24 @@ Ack da mensagem só depois do commit. Se o processo morre no meio, a transação
 
 Evento de integração só é inserido na outbox dentro dessa mesma transação. Publicar antes do commit está fora do desenho.
 
+## Camadas
+
+Clean Architecture simplificada, em quatro pastas:
+
+| Camada | Pasta | Pode depender de |
+| --- | --- | --- |
+| Domínio | `src/domain` (entities, events, services, errors, contracts, usecases) | só de si mesmo |
+| Adapters | `src/infra` (MikroORM, SQS, Keycloak/JWT, logger, métricas) | domínio |
+| Apresentação | `src/presentation/http` (controllers, filtro de erros, presenters) | domínio e infra |
+| Composição | `src/main` (módulos Nest) | tudo |
+
+- **Contratos são `interface`** em `domain/contracts`, cada um com um token (`UNIT_OF_WORK`, `CLOCK`, `ID_GENERATOR`, `METRICS`, `PROVIDER_IDENTITY`), porque interface some em runtime e o Nest precisa de algo para injetar.
+- **Casos de uso são classes puras**: sem `@Injectable`, sem `@Inject`, sem importar Nest, MikroORM ou AWS. Recebem os contratos no construtor e são montados por factories em `main/modules`. Log também é contrato (`Logger`), com adapter sobre o logger do Nest.
+- **Adapters implementam os contratos** (`MikroOrmUnitOfWork implements UnitOfWork`, `PrometheusMetrics implements Metrics`, `SystemClock implements Clock`…). Trocar o banco ou a fila não toca no domínio.
+- Os testes usam a mesma montagem: `buildServices` instancia os casos de uso com os adapters reais, e `FailingUnitOfWork` implementa o mesmo contrato para injetar falha.
+
+Deliberadamente fora: interface para cada classe, DTO de saída por caso de uso (os presenters já isolam o formato HTTP) e camadas que só repassam chamada.
+
 ## Dinheiro
 
 `Money` é imutável. Cada operação devolve outra instância. Por dentro, o valor é um `bigint` de centavos, escala fixa 2. A borda HTTP, a fila e o `data` dos eventos falam só isto:
@@ -278,7 +296,7 @@ A ordem entre eventos do mesmo agregado não é garantida entre publishers difer
 
 ## Persistência
 
-MikroORM 6 (`@mikro-orm/postgresql`), pelo `EntityManager.transactional()`, `LockMode.PESSIMISTIC_WRITE` e identity map por request (`em.fork()`). O agregado não conhece coluna nem decorator: os modelos de persistência são `EntitySchema` em `src/infrastructure/database/records.ts`, e o repositório traduz record ↔ agregado por `rehydrate`.
+MikroORM 6 (`@mikro-orm/postgresql`), pelo `EntityManager.transactional()`, `LockMode.PESSIMISTIC_WRITE` e identity map por request (`em.fork()`). O agregado não conhece coluna nem decorator: os modelos de persistência são `EntitySchema` em `src/infra/database/records.ts`, e o repositório traduz record ↔ agregado por `rehydrate`.
 
 Mapeamento do `Money`: duas colunas, `*_amount numeric(19,2)` e `currency char(3)`. O MikroORM devolve `decimal` como string (`"975.00"`), que vira `bigint` de centavos em `Money.fromStored`. Nenhum valor monetário passa por `number` em nenhum ponto.
 
@@ -292,7 +310,7 @@ Keycloak no Compose, realm `jungle`. A API valida o access token contra o JWKS e
 
 Health fica de fora do guard (`@Public()`). A fila não passa pelo guard.
 
-`ProviderIdentityPort` é a porta de leitura da identidade do request. Hoje a implementação pede o que o guard gravou. Quando a fila precisar de identidade assinada, entra outro adapter atrás da mesma porta, sem o caso de uso conhecer JWT.
+`ProviderIdentityPort` (contrato em `domain/contracts`, token `PROVIDER_IDENTITY`) é a porta de leitura da identidade do request. Hoje a implementação pede o que o guard gravou. Quando a fila precisar de identidade assinada, entra outro adapter atrás da mesma porta, sem o caso de uso conhecer JWT.
 
 A origem das chaves é um provider injetável (`JWT_KEY_RESOLVER`, JWKS remoto por padrão). Os testes e2e trocam só esse provider por uma chave RSA local e assinam tokens com o mesmo `iss`/`aud`/`provider_id`: o guard real roda, sem precisar do Keycloak no ar.
 
