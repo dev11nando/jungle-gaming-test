@@ -40,45 +40,37 @@ curl -s -X POST localhost:3000/wagering/transactions -H "Authorization: Bearer $
 - Docker Compose v2 (Docker Desktop com WSL2)
 - Portas livres: `3000` (API), `5432` (Postgres), `4566` (LocalStack), `8080` (Keycloak)
 
-## Subir a infra
+## Início rápido
+
+Com o Docker rodando:
+
+```bash
+bun run setup
+```
+
+O script (`setup/setup.ts`) confere os pré-requisitos, cria o `.env` a partir do `.env.example` se não existir, instala as dependências, sobe PostgreSQL, LocalStack e Keycloak, espera todos ficarem healthy, roda as migrations, constrói e sobe a API no Docker e só termina quando `/health/ready` responde 200. Na primeira vez leva alguns minutos por causa do download das imagens.
+
+| Comando | Efeito |
+| --- | --- |
+| `bun run setup` | sobe tudo (infra + migrations + API com todos os workers) |
+| `bun run setup --infra` | sobe só a infra e roda as migrations, para rodar a API no host com `bun run start:dev` |
+| `bun run stop` | para todos os containers, mantendo containers e dados; `bun run setup` volta de onde parou |
+| `bun run down` | remove containers e rede; os dados do PostgreSQL ficam no volume |
+| `bun run down --volumes` | remove também os dados; o próximo setup recria banco e realm do zero |
+
+Os scripts são TypeScript rodando no Bun, então funcionam igual em Windows, Linux e macOS.
+
+### Passo a passo manual
 
 ```bash
 cp .env.example .env
 bun install
-bun run stack:up
-```
-
-O Keycloak leva cerca de um minuto na primeira subida. Espere os três serviços ficarem healthy:
-
-```bash
-docker compose ps
-```
-
-Migrations no banco de desenvolvimento:
-
-```bash
+bun run stack:up          # Postgres, LocalStack e Keycloak
 bun run db:migrate
+bun run start:dev         # API no host; ou bun run stack:app para a API no Compose
 ```
 
-A API no host:
-
-```bash
-bun run start:dev
-```
-
-Para subir a API dentro do Compose (perfil `app`), em vez de `bun run start:dev`:
-
-```bash
-bun run stack:app
-```
-
-Parar:
-
-```bash
-bun run stack:down
-```
-
-`docker compose down -v` apaga os volumes. O Postgres só roda `docker/postgres/init.sql` na primeira criação do volume. Sem `-v`, o realm do Keycloak também permanece no banco dele.
+O Postgres só roda `docker/postgres/init.sql` na primeira criação do volume, e o realm do Keycloak fica salvo no banco dele.
 
 ## Token de provedor
 
@@ -107,6 +99,7 @@ Console do Keycloak: `http://localhost:8080` com `admin` / `admin`.
 
 | Comando | Efeito |
 | --- | --- |
+| `bun run setup` / `stop` / `down` | sobe, para ou remove o ambiente inteiro (ver Início rápido) |
 | `bun run start` | sobe a API |
 | `bun run start:dev` | sobe a API e recarrega ao salvar |
 | `bun run typecheck` | `tsc --noEmit` em modo estrito |
@@ -147,6 +140,7 @@ src/
   main.ts            entrypoint
 test/
   unit/ integration/ e2e/ cluster/ load/
+setup/               scripts de setup, stop e down do ambiente
 docker/              init do Postgres, filas FIFO e realm do Keycloak
 ```
 
